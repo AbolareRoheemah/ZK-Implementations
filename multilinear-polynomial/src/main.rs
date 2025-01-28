@@ -2,6 +2,7 @@
 // use std::ops::{Add, Mul};
 use ark_ff::PrimeField;
 use ark_bn254::Fq;
+pub mod bit_format;
 
 // Multilinear polynomials are polynomials with all variables having the power of one
 // We want to be able to represent them and perform evaluations and interpolations on them
