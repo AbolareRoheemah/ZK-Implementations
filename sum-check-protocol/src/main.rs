@@ -1,4 +1,5 @@
 use ark_ff::PrimeField;
+// use multilinear_polynomial::evaluate_interpolate;
 pub mod fiat_shamir;
 
 fn main() {
@@ -11,7 +12,7 @@ fn main() {
 // 2. Partially evaluate a polynomial at a particular var over the hypercube
 // 3. Partially evaluate at one var only
 // Prover always sends a polynomial and a claimed sum
-struct <F: PrimeField> Prover<F> {
+struct Prover<F: PrimeField>  {
     polynomial: Vec<F>
 }
 
