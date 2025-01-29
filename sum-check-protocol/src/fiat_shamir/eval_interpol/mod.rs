@@ -128,11 +128,11 @@ pub fn evaluate_interpolate<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_i
 
 // let the hypercube = [000, 001, 010, 011, 100, 101, 110, 111]
 fn pair_values<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize) -> Vec<(F, F)> {
-    let reps = 2_u32.pow(no_of_vars); // for 3vars = 8
-    // panic if array length doesnt match the no of vars inputed
-    if evals.len() != reps as usize { // i.e length != 8
-        panic!("Wrong length of array input")
-    }
+    // let reps = 2_u32.pow(no_of_vars); // for 3vars = 8
+    // // panic if array length doesnt match the no of vars inputed
+    // if evals.len() != reps as usize { // i.e length != 8
+    //     panic!("Wrong length of array input")
+    // }
     let pick_range = 2_u32.pow(no_of_vars - 1 - var_index as u32);
     let bool_hypercube = get_hypercube(no_of_vars); // = [000, 001, 010, 011, 100, 101, 110, 111]
     let mut y1s: Vec<F> = vec![];
@@ -144,7 +144,7 @@ fn pair_values<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize) 
     println!("var are here {:?}", var);
     while i < bool_hypercube.len() { // (0 < 8)
         for j in 0..pick_range {
-            if (i + j as usize) < bool_hypercube.len() {
+            if (i + j as usize) < bool_hypercube.len() && (i + j as usize) < evals.len() {
                 y1s.push(evals[i + j as usize]);
                 y1s_boolhypercube.push(bool_hypercube[i + j as usize]);
                 y2s_boolhypercube.push(bool_hypercube[i + j as usize] | var);
