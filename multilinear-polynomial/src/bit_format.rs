@@ -169,8 +169,8 @@ fn pair_values<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize) 
 }
 
 fn main() {
-    let cube = evaluate_interpolate(3, vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3), Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)], 2, Fq::from(3));
-    // let cube = evaluate_interpolate(2, vec![Fq::from(0), Fq::from(2), Fq::from(0), Fq::from(5)], 1, Fq::from(5));
+    // let cube = evaluate_interpolate(3, vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3), Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)], 2, Fq::from(3));
+    let cube = evaluate_interpolate(1, vec![Fq::from(0), Fq::from(19)], 0, Fq::from(1));
     // let cube = get_binary_value(7, 3);.
     println!("{:?}", cube);
 }

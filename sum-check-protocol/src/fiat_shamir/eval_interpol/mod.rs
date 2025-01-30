@@ -95,7 +95,6 @@ fn get_binary_value(decimal_value: u32, width: u32) -> u32 {
         bits.insert(0, '0');
     }
     let hold: u32 = bits.parse().expect("error");
-    println!("each bit {:?}", hold);
     bits.parse().expect("error")
 }
 
@@ -105,12 +104,12 @@ fn get_hypercube(no_of_vars: u32) -> Vec<u32> {
     for i in 0..representations {
         hypercube.push(get_binary_value(i, no_of_vars))
     }
-    println!("hypercube {:?}", hypercube);
     hypercube
 }
 
-pub fn evaluate_interpolate<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize, var_eval_at: F) -> Vec<F> {
+pub fn evaluate_interpolate<F: PrimeField>(evals: Vec<F>, var_index: usize, var_eval_at: F) -> Vec<F> {
     // panic if the user wants to evaluate at  an inexistent index
+    let no_of_vars = (evals.len() as f64).log2() as u32;
     if var_index as u32 >= no_of_vars {
         panic!("You cant evaluate at an inexistent index")
     }
@@ -141,7 +140,6 @@ fn pair_values<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize) 
     let mut y2s: Vec<F> = vec![];
     let mut i = 0;
     let var = bool_hypercube[pick_range as usize];
-    println!("var are here {:?}", var);
     while i < bool_hypercube.len() { // (0 < 8)
         for j in 0..pick_range {
             if (i + j as usize) < bool_hypercube.len() && (i + j as usize) < evals.len() {
@@ -154,13 +152,11 @@ fn pair_values<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize) 
     }
     for y in &y2s_boolhypercube {
         if let Some(index) = bool_hypercube.iter().position(|&x| x == *y ) {
-            y2s.push(evals[index])
+            if index < evals.len() {
+                y2s.push(evals[index])
+            }
         }
     }
-    println!("y1s are here{:?}", y1s);
-    println!("y2s are here{:?}", y2s);
-    println!("y1bools are here{:?}", y1s_boolhypercube);
-    println!("y2bools are here{:?}", y2s_boolhypercube);
     // Collecting pairs of y1s and y2s
     y1s.iter()
         .zip(y2s.iter())
@@ -169,8 +165,8 @@ fn pair_values<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize) 
 }
 
 fn main() {
-    let cube = evaluate_interpolate(3, vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3), Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)], 2, Fq::from(3));
+    let cube = evaluate_interpolate(vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3), Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)], 2, Fq::from(3));
     // let cube = evaluate_interpolate(2, vec![Fq::from(0), Fq::from(2), Fq::from(0), Fq::from(5)], 1, Fq::from(5));
     // let cube = get_binary_value(7, 3);.
-    println!("{:?}", cube);
+    println!("cube {:?}", cube);
 }
