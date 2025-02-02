@@ -88,6 +88,7 @@ impl <F: PrimeField> Prover<F> {
         let mut proof_array = vec![];
         let mut current_poly = evals.clone();
         let mut rand_chal;
+        self.transcript.absorb(&evals.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
         let no_of_vars = (evals.len() as f64).log2();
         for _ in 0..no_of_vars as usize {
             let (sum, univar_poly) = self.generate_sum_and_univariate_poly(&current_poly);
@@ -130,6 +131,7 @@ impl<F: PrimeField> Verifier<F> {
         println!("proof length {:?}", proof.len());
         println!("proof {:?}", proof);
         let mut rand_chal_array: Vec<F> = vec![];
+        self.transcript.absorb(&self.polynomial.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
 
         for i in 0..proof.len() {
             let (sum, univar_poly) = &proof[i];
@@ -167,42 +169,42 @@ impl<F: PrimeField> Verifier<F> {
     }
 }
 
-// #[cfg(test)]
-// mod test {
-//     use super::{Prover, Verifier, Transcript, Keccak256};
-//     use sha3::Digest;
-//     use ark_bn254::Fq;
+#[cfg(test)]
+mod test {
+    use super::{Prover, Verifier, Transcript, Keccak256};
+    use sha3::Digest;
+    use ark_bn254::Fq;
 
-//     // #[test]
-//     // fn test_transcript() {
-//     //     let mut transcript = Transcript::<Keccak256, Fq>::new(Keccak256::new());
+    // #[test]
+    // fn test_transcript() {
+    //     let mut transcript = Transcript::<Keccak256, Fq>::new(Keccak256::new());
 
-//     //     transcript.absorb(b"[0,1]");
-//     //     transcript.absorb(b"50");
+    //     transcript.absorb(b"[0,1]");
+    //     transcript.absorb(b"50");
 
-//     //     let random_chal = transcript.squeeze();
-//     //     println!("{}", random_chal);
-//     // }
+    //     let random_chal = transcript.squeeze();
+    //     println!("{}", random_chal);
+    // }
 
-//     #[test]
-//     fn test_generate_proof() {
-//         let transcript = Transcript::<Keccak256, Fq>::new(Keccak256::new());
-//         let evals = vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(2), Fq::from(4)];
-//         let mut prover = Prover::init(evals.clone(), transcript);
-//         let proof = prover.generate_proof(evals);
+    #[test]
+    fn test_generate_proof() {
+        let transcript = Transcript::<Keccak256, Fq>::new(Keccak256::new());
+        let evals = vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(2), Fq::from(4)];
+        let mut prover = Prover::init(evals.clone(), transcript);
+        let proof = prover.generate_proof(evals);
 
-//         println!("{:?}", proof);
-//     }
+        println!("{:?}", proof);
+    }
 
-//     #[test]
-//     fn test_verifier() {
-//         let evals = vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(2), Fq::from(4)];
-//         let transcript = Transcript::<Keccak256, Fq>::new(Keccak256::new());
-//         let mut prover = Prover::init(evals.clone(), transcript);
-//         let proof = prover.generate_proof(evals.clone());
+    #[test]
+    fn test_verifier() {
+        let evals = vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(2), Fq::from(4)];
+        let transcript = Transcript::<Keccak256, Fq>::new(Keccak256::new());
+        let mut prover = Prover::init(evals.clone(), transcript);
+        let proof = prover.generate_proof(evals.clone());
 
-//         let mut verifier = Verifier::init(evals.clone(), Transcript::<Keccak256, Fq>::new(Keccak256::new()), proof);
-//         let result = verifier.verify();
-//         assert!(result, "{}", true);
-//     }
-// }
+        let mut verifier = Verifier::init(evals.clone(), Transcript::<Keccak256, Fq>::new(Keccak256::new()), proof);
+        let result = verifier.verify();
+        assert!(result, "{}", true);
+    }
+}
