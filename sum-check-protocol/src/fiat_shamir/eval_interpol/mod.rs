@@ -9,10 +9,10 @@ use ark_bn254::Fq;
 
 #[derive(Debug, PartialEq, Clone)]
 struct MultilinearPoly<F: PrimeField> {
-    coef_and_exp: Vec<(&'static [F], F)>
+    coef_and_exp: Vec<(Vec<F>, F)>
 }
 impl <F: PrimeField> MultilinearPoly<F> {
-    fn new(coef: Vec<(&'static [F], F)>) -> Self {
+    fn new(coef: Vec<(Vec<F>, F)>) -> Self {
         MultilinearPoly { coef_and_exp: coef }
     }
 

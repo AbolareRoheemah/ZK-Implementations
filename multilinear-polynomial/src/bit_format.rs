@@ -95,11 +95,12 @@ fn get_binary_value(decimal_value: u32, width: u32) -> u32 {
         bits.insert(0, '0');
     }
     let hold: u32 = bits.parse().expect("error");
-    println!("each bit {:?}", hold);
+    println!("each bit {:?}", bits);
+    println!("each hold {:?}", hold);
     bits.parse().expect("error")
 }
 
-fn get_hypercube(no_of_vars: u32) -> Vec<u32> {
+pub fn get_hypercube(no_of_vars: u32) -> Vec<u32> {
     let representations = 2_u32.pow(no_of_vars);
     let mut hypercube: Vec<u32> = vec![];
     for i in 0..representations {
@@ -169,8 +170,8 @@ fn pair_values<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize) 
 }
 
 fn main() {
-    // let cube = evaluate_interpolate(3, vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3), Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)], 2, Fq::from(3));
-    let cube = evaluate_interpolate(1, vec![Fq::from(0), Fq::from(19)], 0, Fq::from(1));
+    let cube = evaluate_interpolate(3, vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3), Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)], 2, Fq::from(3));
+    // let cube = evaluate_interpolate(1, vec![Fq::from(0), Fq::from(19)], 0, Fq::from(1));
     // let cube = get_binary_value(7, 3);.
     println!("{:?}", cube);
 }
