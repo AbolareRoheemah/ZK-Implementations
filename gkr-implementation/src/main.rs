@@ -31,7 +31,7 @@ fn main() {
 
 // The gates: the lowermost layer
 // the inpputs would be indexes. Same as the output. This is so that we can arrange the output and easily pick the right inputs.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Gate {
     left_input: usize,
     right_input: usize,
@@ -56,7 +56,7 @@ impl Gate {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 enum Operation {
     Add,
     Multiply
@@ -67,6 +67,21 @@ enum Operation {
 struct Layer<F: PrimeField> {
     layer_gates: Vec<Gate>,
     layer_output: Vec<F>
+}
+
+#[derive(Debug)]
+struct ProductPoly<F: PrimeField> {
+    degree: F,
+    polys: Vec<Vec<F>>
+}
+
+impl <F: PrimeField>ProductPoly<F> {
+    fn new(degree: F, polys: Vec<Vec<F>>) -> Self {
+        Self {
+            degree,
+            polys
+        }
+    }
 }
 
 // The circuit: A collection of several layers depending on the input and the operations needed
@@ -106,12 +121,12 @@ impl <F: PrimeField>Circuit<F> {
             let layer_length = if i + 1 < no_of_layers { 
                 self.layer_def[i].len()
             } else {
-                1
+                2
             };
             let mut layer = vec![F::zero(); layer_length];
             let mut layer_gate = vec![];
             for gate in &self.layer_def[i] { // for each gate in each layer i.e [0, 0, 0, 1, 0] and [1, 0, 1, 2, 1]
-                let gate_index = gate[0];
+                // let gate_index = gate[0];
                 let op = if gate[1] == 0 {
                     Operation::Add
                 } else {
@@ -133,50 +148,13 @@ impl <F: PrimeField>Circuit<F> {
             self.layers.push(new_layer);
             // no_of_layers -= 1;
         }
+        &self.layers.reverse();
         &self.layers
     }
 
-    fn addi(&mut self, layer_index: usize, left_input_index: usize, right_input_index: usize, output_index: usize) -> usize {
-        let target_layer = &self.layer_def[layer_index];
-        for gate in target_layer {
-            if gate[2] == left_input_index && gate[3] == right_input_index && gate[4] == output_index && gate[1] == 0 {
-                return 1;
-            }
-        }
-        0
-    }
-
-    fn muli(&mut self, layer_index: usize, left_input_index: usize, right_input_index: usize, output_index: usize) -> usize {
-        let target_layer = &self.layer_def[layer_index];
-        for gate in target_layer {
-            if gate[2] == left_input_index && gate[3] == right_input_index && gate[4] == output_index && gate[1] == 1 {
-                return 1;
-            }
-        }
-        0
-    }
-
-    // what i want to do is to loop tru the target layer and use the boolean values to evaluate the addi and muli using check0/check1. So I will check the layer for how many gates it has, if it haas 4 gates, then it means the hypercube is in 2 bits i.e 4/2. If it has 2 gates then the bit is 2/2 = 1 bit and if it has 1 gate then the bit is just 0. I will now pass these boolean values as input to the addi and muli functions. It will loop tru the bool values which are strings and if it is '0', then it will do check0 i.e 1-x where x can be random numbers we want to evaluate at.
-    fn compute_selector_term(&self, x: F, b: bool) -> F {
-        if b {
-            x // If b is 1, return x
-        } else {
-            F::one() - x // If b is 0, return 1-x
-        }
-    }
-    
-    fn compute_selector_product(&self, x_values: &[F], bits: &str) -> F {
-        let mut result = F::one();
-        for (i, bit) in bits.chars().enumerate() {
-            let term = self.compute_selector_term(x_values[i], bit == '1');
-            result *= term;
-        }
-        result
-    }
-
-    fn addi_muli_function(&mut self, layer_index: usize) -> Vec<F> {
-        let target_layer = &self.layer_def[layer_index];
-        let num_gates = target_layer.len();
+    fn addi_muli_function(&mut self, layer_index: usize) -> (Vec<F>, Vec<F>) {
+        let target_layer = &self.layers[layer_index];
+        let num_gates = target_layer.layer_gates.len();
         
         // number of boolean variables needed (log2 of num_gates)
         let output_bit = (num_gates as f64).log2().ceil() as u32;
@@ -193,44 +171,81 @@ impl <F: PrimeField>Circuit<F> {
         let bool_hypercube_len = 2_usize.pow(arg);
         
         // The result will be the sum of all matching gates
-        let mut result = vec![F::zero(); bool_hypercube_len];
-        for gate in target_layer {
-            let left_input_index = gate[2];
-            let right_input_index = gate[3];
-            let output_index = gate[4];
+        let mut addi_result = vec![F::zero(); bool_hypercube_len];
+        let mut muli_result = vec![F::zero(); bool_hypercube_len];
+        for gate in target_layer.layer_gates.clone() {
+            let gate_op = gate.operation;
+            let left_input_index = gate.left_input;
+            let right_input_index = gate.right_input;
+            let output_index = gate.output;
             let input_bit = output_bit + 1;
 
-            let concat_bits = format!("{}{}{}", get_binary_value(output_index as u32, output_bit), get_binary_value(left_input_index as u32, input_bit), get_binary_value(right_input_index as u32, input_bit));
+            let concat_bits = format!("{}{}{}", bit_format::get_binary_value_as_string(output_index as u32, output_bit), bit_format::get_binary_value_as_string(left_input_index as u32, input_bit), bit_format::get_binary_value_as_string(right_input_index as u32, input_bit));
 
             let decimal_value = u32::from_str_radix(&concat_bits, 2);
             match decimal_value {
-                Ok(value) => result[value as usize] = F::one(),
+                Ok(value) => if gate_op == Operation::Add {
+                    addi_result[value as usize] = F::one();
+                } else if gate_op == Operation::Multiply {
+                    muli_result[value as usize] = F::one();
+                },
                 Err(_) => panic!("Error converting binary to decimal")
             };
         };
-        println!("result{:?}", result);
-        result
+        // println!("addi_result{:?}", addi_result);
+        (addi_result, muli_result)
+    }
+
+    fn get_wi_x_func(&self, layer_index: usize, num_vars_after_blowup: u32, index_of_new_var:u32) -> Vec<F> {
+        let target_layer = &self.layers[layer_index];
+        let num_gates = target_layer.layer_gates.len();
+        // wi = [3, 5]
+        let hypercube_len = 2_u32.pow(num_vars_after_blowup); // 2^1 = 2
+
+        let pairing = bit_format::pair_index(num_vars_after_blowup, index_of_new_var as usize); // [0, 0, 1, 1, 2, 2, 3, 3]
+
+        let mut resulting_wi_poly = vec![F::zero(); hypercube_len as usize]; //
+
+        // [3,5] =>  [3,3,5,5] for b
+        pairing.iter().enumerate().for_each(|(index, (left, right))| {
+            resulting_wi_poly[*left as usize] = target_layer.layer_output[index];
+            resulting_wi_poly[*right as usize] = target_layer.layer_output[index];
+        });
+
+        resulting_wi_poly
+    }
+
+    fn add_wi_x_poly(&self, layer_index: usize, num_vars_after_blowup: u32) -> Vec<F> {
+        let wb = self.get_wi_x_func(layer_index, num_vars_after_blowup, 1); // for wb it is 1
+        let wc = self.get_wi_x_func(layer_index, num_vars_after_blowup, 0); // for wc it is 0
+        wb.iter().zip(wc.iter()).map(|(wb, wi)| *wb + *wi).collect()
+    }
+
+    fn mul_wi_x_poly(&self, layer_index: usize, num_vars_after_blowup: u32) -> Vec<F> {
+        let wb = self.get_wi_x_func(layer_index, num_vars_after_blowup, 1);
+        let wc = self.get_wi_x_func(layer_index, num_vars_after_blowup, 0);
+        wb.iter().zip(wc.iter()).map(|(wb, wi)| *wb * *wi).collect()
+    }
+
+    fn get_fbc_poly(&mut self, layer_index: usize, num_vars_after_blowup: u32, a_value: F) -> Vec<ProductPoly<F>> {
+        let (addi_poly, muli_poly) = self.addi_muli_function(layer_index);
+        let wbc_from_add= self.add_wi_x_poly(layer_index + 1, num_vars_after_blowup);
+        let wbc_from_mul= self.mul_wi_x_poly(layer_index + 1, num_vars_after_blowup);
+        let add_rbc = bit_format::evaluate_interpolate(addi_poly, 0, a_value);
+        let mul_rbc = bit_format::evaluate_interpolate(muli_poly, 0, a_value);
+        let fbc_poly = vec![
+            ProductPoly::new(F::from(2), vec![add_rbc, wbc_from_add]),
+            ProductPoly::new(F::from(2), vec![mul_rbc, wbc_from_mul]),
+        ];
+        fbc_poly
     }
 }
 
-fn get_binary_value(decimal_value: u32, width: u32) -> String {
-    let mut bits: String = String::from("");
-    let mut value = decimal_value;
-    while value > 0 {
-        let bit_to_add = (value % 2).to_string();
-        bits.push_str(&bit_to_add);
-        value /= 2;
-    }
-    bits = bits.chars().rev().collect::<String>();
-    while bits.len() < width as usize {
-        bits.insert(0, '0');
-    }
-    bits
-}
+
 
 #[cfg(test)]
 mod test {
-    use crate::Circuit;
+    use crate::{bit_format, Circuit};
     use ark_bn254::Fq;
     use ark_ff::PrimeField;
 
@@ -285,60 +300,104 @@ mod test {
     //     // assert_eq!(evaluated_layers, [])
     // }
 
-    // #[test]
-    // fn test_addi() {
-    //     let layout = vec![
-    //         vec![
-    //             vec![0, 1, 0, 1, 0], // [gate_index, op, left_input, right_input, output_index]
-    //             vec![1, 1, 2, 3, 1]
-    //         ],
-    //         vec![
-    //             vec![0, 0, 0, 1, 0]
-    //         ]
-    //     ]; 
-    //     let mut my_circuit: Circuit<Fq> = Circuit::new(layout);
-    //     let result = my_circuit.addi(0, 0, 1, 0); // check for an addition gate in layer 0 that takes 0, 1 and outputs to 0
-    //     let result1 = my_circuit.addi(1, 0, 1, 0); // check for an addition gate in layer 1 that takes 0, 1 and outputs to 0
-    //     assert_eq!(result, 0);
-    //     assert_eq!(result1, 1);
-    // }
-
-    // #[test]
-    // fn test_muli() {
-    //     let layout = vec![
-    //         vec![
-    //             vec![0, 1, 0, 1, 0], // [gate_index, op, left_input, right_input, output_index]
-    //             vec![1, 1, 2, 3, 1]
-    //         ],
-    //         vec![
-    //             vec![0, 0, 0, 1, 0]
-    //         ]
-    //     ]; 
-    //     let mut my_circuit: Circuit<Fq> = Circuit::new(layout);
-    //     let result = my_circuit.muli(0, 0, 1, 0); // check for an multiplication gate in layer 0 that takes 0, 1 and outputs to 0
-    //     let result2 = my_circuit.muli(0, 2, 3, 1); // check for an multiplication gate in layer 0 that takes 0, 1 and outputs to 0
-    //     let result1 = my_circuit.muli(1, 0, 1, 0); // check for an multiplication gate in layer 1 that takes 0, 1 and outputs to 0
-    //     assert_eq!(result, 1);
-    //     assert_eq!(result1, 0);
-    //     assert_eq!(result2, 1);
-    // }
-
     #[test]
     fn test_addi_muli_function() {
         let layout = vec![
             vec![
-                vec![0, 1, 0, 1, 0], // [gate_index, op, left_input, right_input, output_index]
-                vec![1, 1, 2, 3, 1]
+                vec![0, 0, 0, 1, 0],
+                vec![1, 1, 2, 3, 1],
+                vec![1, 1, 4, 5, 2],
+                vec![1, 1, 6, 7, 3],
+            ],
+            vec![
+                vec![0, 0, 0, 1, 0],
+                vec![1, 1, 2, 3, 1],
             ],
             vec![
                 vec![0, 0, 0, 1, 0]
             ]
         ]; 
         let mut my_circuit: Circuit<Fq> = Circuit::new(layout);
-        // let my_inputs = vec![Fq::from(2), Fq::from(3), Fq::from(1), Fq::from(2)];
-        // let result = my_circuit.addi_or_muli_mle(0, my_inputs);
+        let my_inputs = vec![Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(4), Fq::from(5), Fq::from(6), Fq::from(7), Fq::from(8)];
+        my_circuit.execute(my_inputs);
         let result = my_circuit.addi_muli_function(0);
-        // assert_eq!(result, Fq::from(2));
-        dbg!(result);
+        println!("result for addi and muli {:?}", result);
+    }
+
+    #[test]
+    fn test_get_wi_x_func() {
+        // let wi = vec![Fq::from(3), Fq::from(5)];
+        let layout = vec![
+            vec![
+                vec![0, 0, 0, 1, 0],
+                vec![1, 1, 2, 3, 1],
+                vec![1, 1, 4, 5, 2],
+                vec![1, 1, 6, 7, 3],
+            ],
+            vec![
+                vec![0, 0, 0, 1, 0],
+                vec![1, 1, 2, 3, 1],
+            ],
+            vec![
+                vec![0, 0, 0, 1, 0]
+            ]
+        ]; 
+        let mut my_circuit: Circuit<Fq> = Circuit::new(layout);
+        let my_inputs = vec![Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(4), Fq::from(5), Fq::from(6), Fq::from(7), Fq::from(8)];
+        my_circuit.execute(my_inputs);
+        let result = my_circuit.get_wi_x_func(1, 2, 1);
+        let resultc = my_circuit.get_wi_x_func(1, 2, 0);
+        println!("result for blowup in b {:?}", result);
+        println!("result for blowup in c{:?}", resultc);
+    }
+
+    #[test]
+    fn test_add_and_mul_wi_x_poly() {
+        let layout = vec![
+            vec![
+                vec![0, 0, 0, 1, 0],
+                vec![1, 1, 2, 3, 1],
+                vec![1, 1, 4, 5, 2],
+                vec![1, 1, 6, 7, 3],
+            ],
+            vec![
+                vec![0, 0, 0, 1, 0],
+                vec![1, 1, 2, 3, 1],
+            ],
+            vec![
+                vec![0, 0, 0, 1, 0]
+            ]
+        ]; 
+        let mut my_circuit: Circuit<Fq> = Circuit::new(layout);
+        let my_inputs = vec![Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(4), Fq::from(5), Fq::from(6), Fq::from(7), Fq::from(8)];
+        my_circuit.execute(my_inputs);
+        let wbc_add = my_circuit.add_wi_x_poly(1, 2);
+        let wbc_mul = my_circuit.mul_wi_x_poly(1, 2);
+        println!("result for adding blownup polys{:?}", wbc_add);
+        println!("result for muling blownup polys{:?}", wbc_mul);
+    }
+
+    #[test]
+    fn test_get_fbc_poly() {
+        let layout = vec![
+            vec![
+                vec![0, 0, 0, 1, 0],
+                vec![1, 1, 2, 3, 1],
+                vec![1, 1, 4, 5, 2],
+                vec![1, 1, 6, 7, 3],
+            ],
+            vec![
+                vec![0, 0, 0, 1, 0],
+                vec![1, 1, 2, 3, 1],
+            ],
+            vec![
+                vec![0, 0, 0, 1, 0]
+            ]
+        ]; 
+        let mut my_circuit: Circuit<Fq> = Circuit::new(layout);
+        let my_inputs = vec![Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(4), Fq::from(5), Fq::from(6), Fq::from(7), Fq::from(8)];
+        my_circuit.execute(my_inputs);
+        let fbc_poly = my_circuit.get_fbc_poly(0, 2, Fq::from(0));
+        println!("result for fbc poly{:?}", fbc_poly);
     }
 }
