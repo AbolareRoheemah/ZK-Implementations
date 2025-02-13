@@ -1,8 +1,10 @@
 use core::num;
 use std::ops::Add;
-pub mod bit_format;
-
 use ark_ff::PrimeField;
+pub mod bit_format;
+use bit_format::MultilinearPoly;
+// use multilinear_polynomial::MultilinearPoly;
+
 fn main() {
     println!("Hello, world!");
 }

@@ -133,9 +133,10 @@ impl<F: PrimeField> Verifier<F> {
         let mut rand_chal_array: Vec<F> = vec![];
         self.transcript.absorb(&self.polynomial.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
 
+        let mut claimed_sum = proof[0].0;
         for i in 0..proof.len() {
             let (sum, univar_poly) = &proof[i];
-            let mut claimed_sum: F = *sum;
+            // let mut claimed_sum: F = *sum;
             println!("univar poly {:?}", univar_poly);
             println!("sum {:?}", sum);
             let claim: F = univar_poly.iter().sum();
@@ -147,9 +148,9 @@ impl<F: PrimeField> Verifier<F> {
             let current_poly = eval_interpol::evaluate_interpolate(univar_poly.clone(), 0, rand_chal);
             claimed_sum = current_poly[0];
 
-            if i + 1 < proof.len() {
-                assert_eq!(claimed_sum, proof[i + 1].0)
-            }
+            // if i + 1 < proof.len() {
+            //     assert_eq!(claimed_sum, proof[i + 1].0)
+            // }
 
             if i == proof.len() - 1 {
                 // do oracle check
