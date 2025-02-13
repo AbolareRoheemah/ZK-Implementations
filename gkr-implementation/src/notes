@@ -1,0 +1,18 @@
+So point of this whole GKR stuff is that a prover (GKR prover) wants to prove to a verifier (GKR verifier) that the result of executing a particular set
+of inputs over the circuit is a particular value i.e Wo
+
+The verifier cant do the work on its own and therefore send it to the prover (this means the provers has the circuit over which we want to execute the inputs)
+
+After the prover executes the circuit, it comes up with the final result and the result of the consecutive layers in the circuit as an array
+e.g [[1695, 0], [15, 1680], [3, 12, 30, 56]]
+From the above array, we can see that there are 3 layers in the circuit (excluding the input layer) i.e 
+Wo = [1695, 0]
+W1 = [15, 1680]
+W2 = [3, 12, 30, 56]
+The input layer will be W3 and it it supplied by the user. For this circuit,
+W3 = [1, 2, 3, 4, 5, 6, 7, 8]
+Now heres where the proving work begins
+1. Prover send Wo to the transcript and squeezes a random challenge
+
+
+At the end of the sumcheck round, the sumcheck verifier send a sum_poly back to the GKR prover who now gives the GKR verifier the W values needed to complete the sum check.

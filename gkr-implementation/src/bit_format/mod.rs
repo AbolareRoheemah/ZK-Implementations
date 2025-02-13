@@ -2,6 +2,8 @@
 // use std::ops::{Add, Mul};
 use ark_ff::PrimeField;
 use ark_bn254::Fq;
+use sha3::{Digest, Keccak256};
+use std::marker::PhantomData;
 // mod bit_format;
 
 // Multilinear polynomials are polynomials with all variables having the power of one
@@ -9,10 +11,10 @@ use ark_bn254::Fq;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct MultilinearPoly<F: PrimeField> {
-    coef_and_exp: Vec<(&'static [F], F)>
+    coef_and_exp: Vec<F>
 }
 impl <F: PrimeField> MultilinearPoly<F> {
-    pub fn new(coef: Vec<(&'static [F], F)>) -> Self {
+    pub fn new(coef: Vec<F>) -> Self {
         MultilinearPoly { coef_and_exp: coef }
     }
 
@@ -40,6 +42,60 @@ impl <F: PrimeField> MultilinearPoly<F> {
     //     })
     // }
 
+}
+
+pub struct Transcript<K: HashTrait, F: PrimeField> {
+    hash_func: K,
+    _field: PhantomData<F>
+}
+
+impl <K: HashTrait, F: PrimeField> Transcript<K, F> {
+    pub fn new(hash_func: K) -> Self {
+        Self {
+            hash_func,
+            _field: PhantomData
+        }
+    }
+
+    pub fn absorb(&mut self, data: &[u8]) {
+        self.hash_func.append(data);
+    }
+
+    pub fn squeeze(&mut self) -> F {
+        let squeezed_hash = self.hash_func.generate_hash();
+        self.absorb(&squeezed_hash);
+        F::from_be_bytes_mod_order(&squeezed_hash)
+    }
+}
+
+trait HashTrait {
+    fn append(&mut self, data: &[u8]);
+    fn generate_hash(&mut self) -> Vec<u8>;
+}
+
+impl HashTrait for Keccak256 {
+    fn append(&mut self, data: &[u8]) {
+        self.update(data);
+    }
+
+    fn generate_hash(&mut self) -> Vec<u8> {
+        let challenge = self.clone().finalize().to_vec();
+        self.update(&challenge);
+        challenge
+    }
+}
+
+#[derive(Debug)]
+pub struct ProductPoly<F: PrimeField> {
+    polys: Vec<Vec<F>>
+}
+
+impl <F: PrimeField>ProductPoly<F> {
+    pub fn new(polys: Vec<Vec<F>>) -> Self {
+        Self {
+            polys
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -180,7 +236,11 @@ pub fn pair_values<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usi
 }
 
 pub fn pair_index(no_of_vars: u32, var_index: usize) -> Vec<(u32, u32)> {
-    let pick_range = 2_u32.pow(no_of_vars - 1 - var_index as u32);
+    let pick_range = if no_of_vars != 1 {
+        2_u32.pow(no_of_vars - 1 - var_index as u32)
+    } else {
+        1
+    };
     let bool_hypercube = get_hypercube(no_of_vars); // = [000, 001, 010, 011, 100, 101, 110, 111]
     let mut y1s_boolhypercube: Vec<u32> = vec![];
     let mut y2s_boolhypercube: Vec<u32> = vec![];
@@ -189,8 +249,6 @@ pub fn pair_index(no_of_vars: u32, var_index: usize) -> Vec<(u32, u32)> {
     while i < bool_hypercube.len() { // (0 < 8)
         for j in 0..pick_range {
             if (i + j as usize) < bool_hypercube.len() {
-                // y1s_boolhypercube.push(bool_hypercube[i + j as usize]);
-                // y2s_boolhypercube.push(bool_hypercube[i + j as usize] | var);
                 y1s_boolhypercube.push((i + j as usize).try_into().unwrap());
                 let pair_index = bool_hypercube.iter().position(|&x| x == bool_hypercube[i + j as usize] | var).unwrap(); 
                 y2s_boolhypercube.push(pair_index.try_into().unwrap());

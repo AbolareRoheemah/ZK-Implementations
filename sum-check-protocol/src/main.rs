@@ -2,6 +2,7 @@ use ark_ff::PrimeField;
 // use multilinear_polynomial::evaluate_interpolate;
 pub mod fiat_shamir;
 pub mod take_sum_fiat_shamir;
+pub mod gkr_sum_check;
 use crate::fiat_shamir::eval_interpol;
 // use rand::Rng;
 
