@@ -87,7 +87,7 @@ impl HashTrait for Keccak256 {
 
 #[derive(Debug)]
 pub struct ProductPoly<F: PrimeField> {
-    polys: Vec<Vec<F>>
+    pub polys: Vec<Vec<F>>
 }
 
 impl <F: PrimeField>ProductPoly<F> {
@@ -95,6 +95,66 @@ impl <F: PrimeField>ProductPoly<F> {
         Self {
             polys
         }
+    }
+
+    pub fn degree(&self) -> usize {
+        self.polys.len()
+    }
+
+    pub fn partial_evaluate(&self, var_index: usize, var_eval_at: F) -> Self {
+        let mut new_polys: Vec<Vec<F>> = vec![];
+        for poly in &self.polys {
+            new_polys.push(evaluate_interpolate(poly.clone(), var_index, var_eval_at));
+        }
+        Self::new(new_polys)
+    }
+    pub fn reduce(&self) -> Vec<F> {
+        let mut reduced_polys = vec![F::one(); self.polys[0].len()]; // Initialize with zeros
+
+        for poly in &self.polys {
+            for (i, value) in poly.iter().enumerate() {
+                reduced_polys[i] *= value; 
+            }
+        }
+        reduced_polys
+    }
+}
+
+#[derive(Debug)]
+pub struct SumPoly<F: PrimeField> {
+    pub product_polys: Vec<ProductPoly<F>>
+}
+
+impl <F: PrimeField>SumPoly<F> {
+    pub fn new(product_polys: Vec<ProductPoly<F>>) -> Self {
+        Self {
+            product_polys
+        }
+    }
+
+    pub fn degree(&self) -> usize {
+        self.product_polys.len()
+    }
+
+    pub fn partial_evaluate(&self, var_index: usize, var_eval_at: F) -> Self {
+        let mut new_product_polys: Vec<ProductPoly<F>> = vec![];
+        for product_poly in &self.product_polys {
+            new_product_polys.push(product_poly.partial_evaluate(var_index, var_eval_at));
+        }
+        Self::new(new_product_polys)
+    }
+
+    pub fn reduce(&self) -> Vec<F> {
+        let mut reduced_polys = vec![F::one(); self.product_polys[0].polys[0].len()]; // Initialize with zeros
+
+        for product_poly in &self.product_polys {
+            for poly in &product_poly.polys {
+                for (i, value) in poly.iter().enumerate() {
+                    reduced_polys[i] += value;
+                }
+            }
+        }
+        reduced_polys
     }
 }
 
@@ -124,7 +184,7 @@ impl <F: PrimeField>ProductPoly<F> {
 // ]. Now we need a way to know which element of the array represents evaluation at 000
 //  and which was evaluated at 001 etc. 
 // - Im thinking of asking the user to pass in the number of vars, then check if the length
-// of the array provided is equal to 2^(the number passed in). If it is the next step falls in 
+// of the array provided is equal to 2^(the number passed in). If it is, the next step falls in, 
 // which is to now use the evaluate-interpolate formular to do the partial evaluation 
 // at a specified value for a specified index
 

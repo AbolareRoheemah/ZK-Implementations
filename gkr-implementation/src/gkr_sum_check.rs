@@ -11,6 +11,8 @@ fn main() {
 use ark_ff::{BigInteger, PrimeField};
 use sha3::{Keccak256};
 use crate::bit_format;
+use zk_polynomials::UnivariatePolynomial;
+// use zk_polynomials::UnivariatePoly;
 
 // I need a prover, the fiat shamir transcript and the verifier
 // prover needs to:
@@ -52,7 +54,7 @@ impl <F: PrimeField> Prover<F> {
         (claimed_sum, univar_poly)
     }
 
-    fn generate_proof(&mut self, evals: Vec<F>) -> Proof<F> {
+    pub fn generate_proof(&mut self, evals: Vec<F>) -> Proof<F> {
         let mut proof_array = vec![];
         let mut current_poly = evals.clone();
         let mut rand_chal;
@@ -74,31 +76,30 @@ impl <F: PrimeField> Prover<F> {
     }
 
     // [ProductPoly { polys: [[0, 1, 0, 0], [30, 1695, 1695, 3360]] }, ProductPoly { polys: [[0, 0, 0, 0], [225, 25200, 25200, 2822400]] }]
-    // fn generate_gkr_proof(&mut self, sum_poly: Vec<bit_format::ProductPoly<F>>) -> Proof<F> {
-    //     let mut proof_array = vec![];
-    //     let mut current_poly = evals.clone();
-    //     let mut rand_chal;
-    //     self.transcript.absorb(&evals.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
-    //     let no_of_vars = (evals.len() as f64).log2();
-    //     for _ in 0..no_of_vars as usize {
-    //         let (sum, univar_poly) = self.generate_sum_and_univariate_poly(&current_poly);
-    //         proof_array.push((sum, univar_poly.clone())); // for verifier to be able to access it later
-    //         self.transcript.absorb(sum.into_bigint().to_bytes_be().as_slice());
-    //         self.transcript.absorb(&univar_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
-    //         rand_chal = self.transcript.squeeze();
-    //         current_poly = bit_format::evaluate_interpolate(current_poly.clone(), 0, rand_chal);
-
-    //     }
-
-    //     Proof {
-    //         univars_and_sums: proof_array
-    //     }
-    // }
+    fn generate_gkr_proof(&mut self, sum_poly: bit_format::SumPoly<F>, initial_claimed_sum: F) {
+        // let mut new_sum_poly = vec![];
+        self.transcript.absorb(initial_claimed_sum.into_bigint().to_bytes_be().as_slice());
+        // I need to loop tru the sumpoly and product poly arrays and then for each polynomial in them, I partially evaluate to get a univar in b
+        let sumpoly_degree = sum_poly.product_polys.len();
+        let mut reduced_sum_poly_array: Vec<F> = vec![];
+        // let reduced_sum_poly_array = vec![F::from(0); sumpoly_degree + 1];
+        for i in 0..sumpoly_degree + 1 {
+            let partially_evaluated_poly = sum_poly.partial_evaluate(0, F::from(i as u64));
+            // i need to reduce this sum poly which would give me just a vec of F. This is what I would push into te partially_eval_poly_array. Reducing gives an array of evals
+            let reduced_sum_poly = partially_evaluated_poly.reduce();
+            reduced_sum_poly_array.push(reduced_sum_poly.iter().sum()); // pushing the ys that would be used for univariate interpolation
+        }
+        // interpolate the reduced_sum_poly_array (ys) and [0, 1, 2] (xs) to get the univariate polynomial
+        // let univar_poly = zk_polynomials::UnivariatePoly::interpolate((0..sumpoly_degree + 1).map(|x| F::from(x as u64)).collect(), reduced_sum_poly_array);
+        // Proof {
+        //     univars_and_sums: proof_array
+        // }
+    }
 
 }
 
 #[derive(Debug)]
-struct Proof<F: PrimeField> {
+pub struct Proof<F: PrimeField> {
     univars_and_sums: Vec<(F, Vec<F>)>
 }
 

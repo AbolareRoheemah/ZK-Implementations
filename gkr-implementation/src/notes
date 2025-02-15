@@ -12,7 +12,20 @@ W2 = [3, 12, 30, 56]
 The input layer will be W3 and it it supplied by the user. For this circuit,
 W3 = [1, 2, 3, 4, 5, 6, 7, 8]
 Now heres where the proving work begins
-1. Prover send Wo to the transcript and squeezes a random challenge
+1. GKR Prover send Wo to the transcript and squeezes a random challenge r0
+2. GKR prover evaluates Wo at r0 to get the initial claimed sum
+3. GKR prover also gets the f0(a,b,c) poly and evaluates a at r0 to give f0(b,c)
+4. GKR Prover send initial claimed sum and f0(b,c) poly to the sum check prover. In this case, the fbc poly is a vec of product polys.
+5. Sumcheck prover generates a univar poly in b and sends the initial claimed sum and the univar poly to the transcript
+Note: Only the initial claimed sum and the univar poly for each round would be sent to the transcript, no need to send the claimed sum for each round.
+6. Sum check prover squeezes a random chal, r1 and evaluates the f0(b,c) poly at r1 to get the next univar poly in c i.e f(c)
+7. Sum check prover send f(c) to the transcript but doesn't squeeze a chal. Now to the verifier
+8. The sum check verifier then takes the proof, gets the initial claimed sum and the first univar poly from it and 
+
+
+To generate the univariate polynoials, we partially evaluate the fbc poly at c = 0, 1 and 2 and sum over the bool hypercube (I think the partial evaluation function does this already) the new poly would now have 3 elements in it which is the univar poly f(b). The verifier would now use the univariate interpolation method on that poly where the xs are the 0, 1,2 and the ys are the values in the univar poly.
+
+Its basically the same thing Uche did. Just that instead of using for loops, he had methods for the sumpoly and productpoly to loop over them selves and the end call the partial evaluate function. so the only for loop he did was for the 0, 1, 2 evaluation. The rest were just iter::repeat() i think
 
 
 At the end of the sumcheck round, the sumcheck verifier send a sum_poly back to the GKR prover who now gives the GKR verifier the W values needed to complete the sum check.

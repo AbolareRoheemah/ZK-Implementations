@@ -2,12 +2,12 @@ use std::iter::{Product, Sum};
 use std::ops::{Add, Mul};
 
 #[derive(Debug, PartialEq, Clone)]
-struct Univariatepoly {
+pub struct Univariatepoly {
     coef: Vec<f64>
 }
 
 impl Univariatepoly {
-    fn new(coef: Vec<f64>) -> Self {
+    pub fn new(coef: Vec<f64>) -> Self {
         Univariatepoly {
             coef
         }
@@ -22,7 +22,7 @@ impl Univariatepoly {
         self.coef.iter().rev().cloned().reduce(|acc, curr| acc * x + curr).unwrap()
     }
 
-    fn interpolate(xs: Vec<f64>, ys: Vec<f64>) -> Self {
+   pub fn interpolate(xs: Vec<f64>, ys: Vec<f64>) -> Self {
         xs.iter().zip(ys.iter()).map(|(x, y)| Self::basis(x, xs.clone()).scalar_mul(*y)).sum()
     }
 
@@ -149,4 +149,8 @@ mod test {
 
         assert_eq!(ans.coef, vec![0.0, 2.0]);
     }
+}
+
+fn main() {
+
 }

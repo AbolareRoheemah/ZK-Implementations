@@ -4,7 +4,6 @@ use ark_ff::{BigInteger, PrimeField};
 pub mod bit_format;
 pub mod gkr_sum_check;
 use sha3::{Digest, Keccak256};
-
 fn main() {
     println!("Hello, world!");
 }
@@ -237,7 +236,7 @@ impl <F: PrimeField>GKRProver<F> {
         self.circuit.execute(inputs)
     }
 
-    fn invoke_sum_check_prover(&mut self, num_vars_after_blowup: u32) {
+    fn invoke_sum_check_prover(&mut self) {
         let mut gkr_transcript = bit_format::Transcript::<sha3::Keccak256, F>::new(sha3::Keccak256::new());
         let mut circuit = self.circuit.clone();
         let executed_layers = circuit.layers.clone();
@@ -245,13 +244,12 @@ impl <F: PrimeField>GKRProver<F> {
         gkr_transcript.absorb(&w0_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
         let r0 = gkr_transcript.squeeze();
         let initial_claimed_sum = bit_format::evaluate_interpolate(w0_poly.to_vec(), 0, r0)[0];
-        gkr_transcript.absorb(initial_claimed_sum.into_bigint().to_bytes_be().as_slice());
-        let initial_fbc_poly = circuit.get_fbc_poly(0, 1, r0);
+        // gkr_transcript.absorb(initial_claimed_sum.into_bigint().to_bytes_be().as_slice());
+        let initial_fbc_poly = circuit.get_fbc_poly(0, 2, r0); // fbc poly eval at r0
+        // initial claimed sum and initial fbc poly will be sent to sumcheck prover
+        let sumcheck_prover = gkr_sum_check::Prover::init(initial_fbc_poly, gkr_transcript);
 
-        // println!("initial_claimed_sum{:?}", initial_claimed_sum);
-        // let target_layer_fbc_poly = circuit.get_fbc_poly(layer_index, num_vars_after_blowup, r_0);
-
-        // let prover = gkr_sum_check::Prover::init(target_layer_fbc_poly, gkr_transcript);
+        // sumcheck_prover.generate_gkr_proof(evals, initial_claimed_sum)
     }
 }
 
