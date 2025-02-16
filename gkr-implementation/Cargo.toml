@@ -8,4 +8,4 @@ ark-ff = "0.5.0"
 ark-bn254 = "0.5.0"
 sha3 = "0.10.8"
 multilinear-polynomial = {path = "../multilinear-polynomial"}
-zk_polynomials = { git = "https://github.com/AbolareRoheemah/ZK-Implementations.git", branch = "master", package = "zk-polynomials" }
+zk-polynomials = { path = "../zk-polynomials" }

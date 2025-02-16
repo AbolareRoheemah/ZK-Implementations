@@ -2,6 +2,7 @@ use core::num;
 use std::ops::Add;
 use ark_ff::{BigInteger, PrimeField};
 pub mod bit_format;
+pub mod univar_poly;
 pub mod gkr_sum_check;
 use sha3::{Digest, Keccak256};
 fn main() {

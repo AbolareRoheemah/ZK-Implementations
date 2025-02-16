@@ -38,7 +38,7 @@ fn main() {
             }).sum()
         }
 
-        fn scalar_mul(&self, scalar: &u32) -> {
+        fn scalar_mul(&self, scalar: &u32) -> Self {
             Univariatepoly {
                 coef: self.coef.iter().map(|coeff| coeff * scalar).collect()
             }

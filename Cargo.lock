@@ -279,6 +279,7 @@ dependencies = [
  "ark-ff",
  "multilinear-polynomial",
  "sha3",
+ "zk-polynomials",
 ]
 
 [[package]]
