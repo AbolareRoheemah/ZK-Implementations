@@ -241,16 +241,18 @@ impl <F: PrimeField>GKRProver<F> {
         let mut gkr_transcript = bit_format::Transcript::<sha3::Keccak256, F>::new(sha3::Keccak256::new());
         let mut circuit = self.circuit.clone();
         let executed_layers = circuit.layers.clone();
+        let num_of_gates = executed_layers[0].layer_gates.len();
+        let output_bit = (num_gates as f64).log2().ceil() as u32;
+        let total_bc_bits = (output_bit + 1) * 2;
         let w0_poly = &executed_layers[0].layer_output;
         gkr_transcript.absorb(&w0_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
         let r0 = gkr_transcript.squeeze();
         let initial_claimed_sum = bit_format::evaluate_interpolate(w0_poly.to_vec(), 0, r0)[0];
-        // gkr_transcript.absorb(initial_claimed_sum.into_bigint().to_bytes_be().as_slice());
         let initial_fbc_poly = circuit.get_fbc_poly(0, 2, r0); // fbc poly eval at r0
         // initial claimed sum and initial fbc poly will be sent to sumcheck prover
         let sumcheck_prover = gkr_sum_check::Prover::init(initial_fbc_poly, gkr_transcript);
 
-        // sumcheck_prover.generate_gkr_proof(evals, initial_claimed_sum)
+        let sumcheck_proof = sumcheck_prover.generate_sumcheck_proof(evals, initial_claimed_sum, total_bc_bits);
     }
 }
 
