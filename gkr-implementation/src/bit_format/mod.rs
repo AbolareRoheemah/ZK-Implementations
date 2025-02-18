@@ -85,7 +85,7 @@ impl HashTrait for Keccak256 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProductPoly<F: PrimeField> {
     pub polys: Vec<Vec<F>>
 }

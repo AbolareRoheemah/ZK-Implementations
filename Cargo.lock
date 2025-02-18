@@ -277,9 +277,8 @@ version = "0.1.0"
 dependencies = [
  "ark-bn254",
  "ark-ff",
- "multilinear-polynomial",
+ "num-bigint",
  "sha3",
- "zk-polynomials",
 ]
 
 [[package]]

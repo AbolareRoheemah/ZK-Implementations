@@ -128,23 +128,43 @@ impl <F: PrimeField>Circuit<F> {
         &self.layers
     }
 
-    fn addi_muli_function(&mut self, layer_index: usize) -> (Vec<F>, Vec<F>) {
+    fn get_bit_len(&self, layer_index: usize) -> (u32, u32) {
         let target_layer = &self.layers[layer_index];
         let num_gates = target_layer.layer_gates.len();
         
         // number of boolean variables needed (log2 of num_gates)
-        let output_bit = (num_gates as f64).log2().ceil() as u32;
         // if I have 4 gate on the layer, the output gate i.e the gate at the layer in question is going to be 2 bits i.e output_bit while the input gates will have 3 bits i.e 1 + output gate bits. And since we have 2 input gates then it would be (2 + 1) * 2 + 2 = 8 bits.
         // so for the layer with 4 gates, output_bit = 2 and therefore, arg = ((2 +1) * 2) + 2 = 8
         // and for the layer with 2 gates, output_bit = 1 and therefore, arg = ((1 +1) * 2) + 1 = 5
         // and for the layer with 1 gate, output_bit = 0 and therefore, arg = ((0 +1) * 2) + 1 = 3
-        // this also means that if the output bit is of len 2 i.e output_bit, then the input bits will be of len 3 each i.e output_bit + 1
-        let arg = if output_bit != 0 {
-            ((output_bit + 1) * 2) + output_bit
+        let output_bit = if (num_gates as f64).log2().ceil() as u32 == 0 {
+            (num_gates as f64).log2().ceil() as u32 + 1
         } else {
-            ((output_bit + 1) * 2) + 1
+            (num_gates as f64).log2().ceil() as u32
         };
-        let bool_hypercube_len = 2_usize.pow(arg);
+        (output_bit, (output_bit + 1) * 2)
+    }
+
+    fn calculate_num_vars_after_blowup(&self, layer_index: usize) -> u32 {
+        let target_layer = &self.layers[layer_index + 1]; // We use i+1 layer
+        let num_gates = target_layer.layer_gates.len();
+        
+        // Calculate number of variables needed to represent indices (log2(num_gates))
+        // Add 1 for the blowup variable
+        let base_vars = if num_gates <= 1 {
+            1
+        } else {
+            (num_gates as f64).log2().ceil() as u32
+        };
+        
+        base_vars + 1
+    }
+
+    fn addi_muli_function(&mut self, layer_index: usize) -> (Vec<F>, Vec<F>) {
+        let target_layer = &self.layers[layer_index];
+        
+        let (output_bit, input_bit) = self.get_bit_len(layer_index);
+        let bool_hypercube_len = 2_usize.pow(output_bit + input_bit);
         
         // The result will be the sum of all matching gates
         let mut addi_result = vec![F::zero(); bool_hypercube_len];
@@ -172,7 +192,8 @@ impl <F: PrimeField>Circuit<F> {
         (addi_result, muli_result)
     }
 
-    pub fn get_wi_x_func(&self, layer_index: usize, num_vars_after_blowup: u32, index_of_new_var:u32) -> Vec<F> {
+    pub fn get_wi_x_func(&self, layer_index: usize, index_of_new_var:u32) -> Vec<F> {
+        let num_vars_after_blowup = self.calculate_num_vars_after_blowup(layer_index);
         let target_layer = &self.layers[layer_index];
         let num_gates = target_layer.layer_gates.len();
         // wi = [3, 5]
@@ -192,22 +213,24 @@ impl <F: PrimeField>Circuit<F> {
         resulting_wi_poly
     }
 
-    fn add_wi_x_poly(&self, layer_index: usize, num_vars_after_blowup: u32) -> Vec<F> {
-        let wb = self.get_wi_x_func(layer_index, num_vars_after_blowup, 1); // for wb it is 1
-        let wc = self.get_wi_x_func(layer_index, num_vars_after_blowup, 0); // for wc it is 0
+    fn add_wi_x_poly(&self, layer_index: usize) -> Vec<F> {
+        let wb = self.get_wi_x_func(layer_index, 1); // for wb it is 1
+        let wc = self.get_wi_x_func(layer_index, 0); // for wc it is 0
         wb.iter().zip(wc.iter()).map(|(wb, wi)| *wb + *wi).collect()
     }
 
-    fn mul_wi_x_poly(&self, layer_index: usize, num_vars_after_blowup: u32) -> Vec<F> {
-        let wb = self.get_wi_x_func(layer_index, num_vars_after_blowup, 1);
-        let wc = self.get_wi_x_func(layer_index, num_vars_after_blowup, 0);
+    fn mul_wi_x_poly(&self, layer_index: usize) -> Vec<F> {
+        let wb = self.get_wi_x_func(layer_index, 1);
+        let wc = self.get_wi_x_func(layer_index, 0);
         wb.iter().zip(wc.iter()).map(|(wb, wi)| *wb * *wi).collect()
     }
 
-    fn get_fbc_poly(&mut self, layer_index: usize, num_vars_after_blowup: u32, a_value: F) -> Vec<bit_format::ProductPoly<F>> {
+    fn get_fbc_poly(&mut self, layer_index: usize, a_value: F) -> Vec<bit_format::ProductPoly<F>> {
+        let num_vars_after_blowup = self.calculate_num_vars_after_blowup(layer_index);
+        let (a_bits, bc_bits) = self.get_bit_len(layer_index);
         let (addi_poly, muli_poly) = self.addi_muli_function(layer_index);
-        let wbc_from_add= self.add_wi_x_poly(layer_index + 1, num_vars_after_blowup);
-        let wbc_from_mul= self.mul_wi_x_poly(layer_index + 1, num_vars_after_blowup);
+        let wbc_from_add= self.add_wi_x_poly(layer_index + 1);
+        let wbc_from_mul= self.mul_wi_x_poly(layer_index + 1);
         let add_rbc = bit_format::evaluate_interpolate(addi_poly, 0, a_value);
         let mul_rbc = bit_format::evaluate_interpolate(muli_poly, 0, a_value);
         let fbc_poly = vec![
@@ -237,23 +260,28 @@ impl <F: PrimeField>GKRProver<F> {
         self.circuit.execute(inputs)
     }
 
-    fn invoke_sum_check_prover(&mut self) {
-        let mut gkr_transcript = bit_format::Transcript::<sha3::Keccak256, F>::new(sha3::Keccak256::new());
+    fn invoke_sum_check_prover(&mut self) -> Vec<gkr_sum_check::Proof<F>> {
+        // let mut gkr_transcript = bit_format::Transcript::<sha3::Keccak256, F>::new(sha3::Keccak256::new());
         let mut circuit = self.circuit.clone();
         let executed_layers = circuit.layers.clone();
-        let num_of_gates = executed_layers[0].layer_gates.len();
-        let output_bit = (num_gates as f64).log2().ceil() as u32;
-        let total_bc_bits = (output_bit + 1) * 2;
-        let w0_poly = &executed_layers[0].layer_output;
-        gkr_transcript.absorb(&w0_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
-        let r0 = gkr_transcript.squeeze();
-        let initial_claimed_sum = bit_format::evaluate_interpolate(w0_poly.to_vec(), 0, r0)[0];
-        let initial_fbc_poly = circuit.get_fbc_poly(0, 2, r0); // fbc poly eval at r0
-        // initial claimed sum and initial fbc poly will be sent to sumcheck prover
-        let sumcheck_prover = gkr_sum_check::Prover::init(initial_fbc_poly, gkr_transcript);
+        let (input_bit, total_bc_bits) = circuit.get_bit_len(0);
+        let mut sumcheck_proof = vec![];
+        for i in 0..input_bit {
+            let w_poly = &executed_layers[i as usize].layer_output;
+            let mut gkr_transcript = bit_format::Transcript::<sha3::Keccak256, F>::new(sha3::Keccak256::new());
+            gkr_transcript.absorb(&w_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
+            let r0 = gkr_transcript.squeeze();
+            let initial_claimed_sum = bit_format::evaluate_interpolate(w_poly.to_vec(), 0, r0)[i as usize];
+            let initial_fbc_poly = circuit.get_fbc_poly(0, r0);
+            // initial claimed sum and initial fbc poly will be sent to sumcheck prover
 
-        let sumcheck_proof = sumcheck_prover.generate_sumcheck_proof(evals, initial_claimed_sum, total_bc_bits);
+            let mut sumcheck_prover = gkr_sum_check::Prover::init(initial_fbc_poly.clone(), gkr_transcript);
+
+            sumcheck_proof.push(sumcheck_prover.generate_sumcheck_proof(bit_format::SumPoly { product_polys: initial_fbc_poly }, initial_claimed_sum, total_bc_bits));
+        };
+        sumcheck_proof
     }
+
 }
 
 struct GkrVerifier<F: PrimeField> {
@@ -364,8 +392,8 @@ mod test {
         let mut my_circuit: Circuit<Fq> = Circuit::new(layout);
         let my_inputs = vec![Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(4), Fq::from(5), Fq::from(6), Fq::from(7), Fq::from(8)];
         my_circuit.execute(my_inputs);
-        let result = my_circuit.get_wi_x_func(1, 2, 1); // by design, layer index passed into this function cant be zero coz we are always using the Wi from the i+1 layer so if i = 0, the W we would be using would be W(0 +1) = W1
-        let resultc = my_circuit.get_wi_x_func(1, 2, 0);
+        let result = my_circuit.get_wi_x_func(1, 1); // by design, layer index passed into this function cant be zero coz we are always using the Wi from the i+1 layer so if i = 0, the W we would be using would be W(0 +1) = W1
+        let resultc = my_circuit.get_wi_x_func(1, 0);
         println!("result for blowup in b {:?}", result);
         println!("result for blowup in c{:?}", resultc);
     }
@@ -390,8 +418,8 @@ mod test {
         let mut my_circuit: Circuit<Fq> = Circuit::new(layout);
         let my_inputs = vec![Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(4), Fq::from(5), Fq::from(6), Fq::from(7), Fq::from(8)];
         my_circuit.execute(my_inputs);
-        let wbc_add = my_circuit.add_wi_x_poly(0, 2); // by design, num of vars after blow up cant be less than 2 coz we always start from W1 which when blown up has 2 vars
-        let wbc_mul = my_circuit.mul_wi_x_poly(0, 2);
+        let wbc_add = my_circuit.add_wi_x_poly(0); // by design, num of vars after blow up cant be less than 2 coz we always start from W1 which when blown up has 2 vars
+        let wbc_mul = my_circuit.mul_wi_x_poly(0);
         println!("result for adding blownup polys{:?}", wbc_add);
         println!("result for muling blownup polys{:?}", wbc_mul);
     }
@@ -416,7 +444,7 @@ mod test {
         let mut my_circuit: Circuit<Fq> = Circuit::new(layout);
         let my_inputs = vec![Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(4), Fq::from(5), Fq::from(6), Fq::from(7), Fq::from(8)];
         my_circuit.execute(my_inputs);
-        let fbc_poly = my_circuit.get_fbc_poly(0, 2, Fq::from(0));
+        let fbc_poly = my_circuit.get_fbc_poly(0, Fq::from(0));
         println!("result for fbc poly{:?}", fbc_poly);
     }
 }

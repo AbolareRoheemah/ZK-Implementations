@@ -12,6 +12,7 @@ use ark_ff::{BigInteger, PrimeField};
 use sha3::{Keccak256};
 use crate::bit_format;
 use crate::univar_poly;
+use num_bigint::ToBigInt;
 
 // use zk_polynomials::UnivariatePoly;
 // use zk_polynomials::UnivariatePoly;
@@ -56,27 +57,27 @@ impl <F: PrimeField> Prover<F> {
         (claimed_sum, univar_poly)
     }
 
-    pub fn generate_proof(&mut self, evals: Vec<F>) -> Proof<F> {
-        let mut proof_array = vec![];
-        let mut current_poly = evals.clone();
-        let mut rand_chal;
-        self.transcript.absorb(&evals.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
-        let no_of_vars = (evals.len() as f64).log2();
-        for _ in 0..no_of_vars as usize {
-            let (sum, univar_poly) = self.generate_sum_and_univariate_poly(&current_poly);
-            proof_array.push((sum, univar_poly.clone())); // for verifier to be able to access it later
-            self.transcript.absorb(sum.into_bigint().to_bytes_be().as_slice());
-            self.transcript.absorb(&univar_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
-            rand_chal = self.transcript.squeeze();
-            current_poly = bit_format::evaluate_interpolate(current_poly.clone(), 0, rand_chal);
+    // pub fn generate_proof(&mut self, evals: Vec<F>) -> Proof<F> {
+    //     let mut proof_array = vec![];
+    //     let mut current_poly = evals.clone();
+    //     let mut rand_chal;
+    //     self.transcript.absorb(&evals.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
+    //     let no_of_vars = (evals.len() as f64).log2();
+    //     for _ in 0..no_of_vars as usize {
+    //         let (sum, univar_poly) = self.generate_sum_and_univariate_poly(&current_poly);
+    //         proof_array.push((sum, univar_poly.clone())); // for verifier to be able to access it later
+    //         self.transcript.absorb(sum.into_bigint().to_bytes_be().as_slice());
+    //         self.transcript.absorb(&univar_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
+    //         rand_chal = self.transcript.squeeze();
+    //         current_poly = bit_format::evaluate_interpolate(current_poly.clone(), 0, rand_chal);
 
-        }
+    //     }
 
-        Proof {
-            initial_claimed_sum,
-            univars_and_sums: proof_array
-        }
-    }
+    //     Proof {
+    //         initial_claimed_sum,
+    //         univars_and_sums: proof_array
+    //     }
+    // }
 
     // [ProductPoly { polys: [[0, 1, 0, 0], [30, 1695, 1695, 3360]] }, ProductPoly { polys: [[0, 0, 0, 0], [225, 25200, 25200, 2822400]] }]
     pub fn generate_sumcheck_proof(&mut self, sum_poly: bit_format::SumPoly<F>, initial_claimed_sum: F, total_bc_bits: u32) -> Proof<F> {
@@ -87,13 +88,13 @@ impl <F: PrimeField> Prover<F> {
 
         // I need to loop tru the sumpoly and product poly arrays and then for each polynomial in them, I partially evaluate to get a univar in b
         let sumpoly_degree = sum_poly.degree();
-        let current_poly = sum_poly;
+        let mut current_poly = sum_poly;
 
         for bit in 0..total_bc_bits {
             let mut reduced_sum_poly_array: Vec<F> = vec![];
             // since the degree of our poly is 2, we need 2 + 1 points to completely desc the poly
             for i in 0..sumpoly_degree + 1 {
-                let partially_evaluated_poly = sum_poly.partial_evaluate(0, F::from(i as u64)); // i.e keep c (index 0) and eval b over hypercube
+                let partially_evaluated_poly = current_poly.partial_evaluate(0, F::from(i as u64)); // i.e keep c (index 0) and eval b over hypercube
     
                 // i need to reduce this sum poly which would give me just a vec of F. This is what I would push into te partially_eval_poly_array. Reducing gives an array of evals
                 let reduced_sum_poly = partially_evaluated_poly.reduce();
@@ -101,10 +102,10 @@ impl <F: PrimeField> Prover<F> {
             }
 
             // interpolate the reduced_sum_poly_array (ys) and [0, 1, 2] (xs) to get the univariate polynomial
-            let univar_poly_fc = univar_poly::Univariatepoly::interpolate((0..sumpoly_degree + 1).collect(), reduced_sum_poly_array);
-            round_poly.push(univar_poly_fc);
+            let univar_poly_fc = univar_poly::Univariatepoly::interpolate(vec![F::from(0), F::from(1), F::from(2)], reduced_sum_poly_array);
+            round_poly.push(univar_poly_fc.clone());
 
-            self.transcript.absorb(&univar_poly_fc.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
+            self.transcript.absorb(&univar_poly_fc.coef.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
             let rb = self.transcript.squeeze();
             // evaluate fbc at rb
             current_poly = current_poly.partial_evaluate(0, rb);
@@ -121,7 +122,7 @@ impl <F: PrimeField> Prover<F> {
 #[derive(Debug)]
 pub struct Proof<F: PrimeField> {
     initial_claimed_sum: F,
-    univars_and_sums: Vec<univar_poly::Univariatepoly>
+    univars_and_sums: Vec<univar_poly::Univariatepoly<F>>
 }
 
 struct Verifier<F: PrimeField> {
@@ -139,48 +140,49 @@ impl<F: PrimeField> Verifier<F> {
         }
     }
 
-    fn verify(&mut self) -> bool {
-        let proof = &self.proof.univars_and_sums;
-        println!("proof length {:?}", proof.len());
-        println!("proof {:?}", proof);
-        let mut rand_chal_array: Vec<F> = vec![];
-        self.transcript.absorb(&self.polynomial.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
+    // fn verify(&mut self) -> bool {
+    //     let proof = &self.proof.univars_and_sums;
+    //     println!("proof length {:?}", proof.len());
+    //     println!("proof {:?}", proof);
+    //     let mut rand_chal_array: Vec<F> = vec![];
+    //     self.transcript.absorb(&self.polynomial.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
 
-        let mut claimed_sum = proof[0].0;
-        for i in 0..proof.len() {
-            let (sum, univar_poly) = &proof[i];
-            // let mut claimed_sum: F = *sum;
-            println!("univar poly {:?}", univar_poly);
-            println!("sum {:?}", sum);
-            let claim: F = univar_poly.iter().sum();
-            assert_eq!(claimed_sum, claim);
-            self.transcript.absorb(sum.into_bigint().to_bytes_be().as_slice());
-            self.transcript.absorb(&univar_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
-            let rand_chal = self.transcript.squeeze();
-            rand_chal_array.push(rand_chal);
-            let current_poly = bit_format::evaluate_interpolate(univar_poly.clone(), 0, rand_chal);
-            claimed_sum = current_poly[0];
+    //     let mut claimed_sum = proof[0];
+    //     for i in 0..proof.len() {
+    //         let (sum, univar_poly) = &proof[i];
+    //         // let mut claimed_sum: F = *sum;
+    //         println!("univar poly {:?}", univar_poly);
+    //         println!("sum {:?}", sum);
+    //         let claim: F = univar_poly.iter().sum();
+    //         assert_eq!(claimed_sum, claim);
+    //         self.transcript.absorb(sum.into_bigint().to_bytes_be().as_slice());
+    //         self.transcript.absorb(&univar_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
+    //         let rand_chal = self.transcript.squeeze();
+    //         rand_chal_array.push(rand_chal);
+    //         let current_poly = bit_format::evaluate_interpolate(univar_poly.clone(), 0, rand_chal);
+    //         claimed_sum = current_poly[0];
 
-            // if i + 1 < proof.len() {
-            //     assert_eq!(claimed_sum, proof[i + 1].0)
-            // }
+    //         // if i + 1 < proof.len() {
+    //         //     assert_eq!(claimed_sum, proof[i + 1].0)
+    //         // }
 
-            if i == proof.len() - 1 {
-                // do oracle check
-                // let mut final_check_sum: Vec<F> = vec![];
-                let mut poly: Vec<F> = self.polynomial.clone();
+    //         if i == proof.len() - 1 {
+    //             // do oracle check
+    //             // let mut final_check_sum: Vec<F> = vec![];
+    //             let mut poly: Vec<F> = self.polynomial.clone();
 
-                println!("rand chal array {:?}", rand_chal_array);
-                for i in 0..rand_chal_array.len() {
-                    poly = bit_format::evaluate_interpolate(poly.clone(), 0, rand_chal_array[i]);
-                }
-                println!("final sum {:?}", poly[0]);
-                println!("final pol {:?}", current_poly[0]);
-                assert_eq!(poly[0], current_poly[0])
-            }
-        }
-        true
-    }
+    //             println!("rand chal array {:?}", rand_chal_array);
+    //             for i in 0..rand_chal_array.len() {
+    //                 poly = bit_format::evaluate_interpolate(poly.clone(), 0, rand_chal_array[i]);
+    //             }
+    //             println!("final sum {:?}", poly[0]);
+    //             println!("final pol {:?}", current_poly[0]);
+    //             assert_eq!(poly[0], current_poly[0])
+    //         }
+    //     }
+    //     true
+    // }
+
 }
 
 #[cfg(test)]
