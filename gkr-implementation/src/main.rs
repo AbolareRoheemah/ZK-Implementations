@@ -225,14 +225,18 @@ impl <F: PrimeField>Circuit<F> {
         wb.iter().zip(wc.iter()).map(|(wb, wi)| *wb * *wi).collect()
     }
 
-    fn get_fbc_poly(&mut self, layer_index: usize, a_value: F) -> Vec<bit_format::ProductPoly<F>> {
+    fn get_fbc_poly(&mut self, layer_index: usize, a_value: Vec<F>) -> Vec<bit_format::ProductPoly<F>> {
         let num_vars_after_blowup = self.calculate_num_vars_after_blowup(layer_index);
-        let (a_bits, bc_bits) = self.get_bit_len(layer_index);
+        let (a_bits, _) = self.get_bit_len(layer_index);
         let (addi_poly, muli_poly) = self.addi_muli_function(layer_index);
+        let mut add_rbc = addi_poly;
+        let mut mul_rbc = muli_poly;
         let wbc_from_add= self.add_wi_x_poly(layer_index + 1);
         let wbc_from_mul= self.mul_wi_x_poly(layer_index + 1);
-        let add_rbc = bit_format::evaluate_interpolate(addi_poly, 0, a_value);
-        let mul_rbc = bit_format::evaluate_interpolate(muli_poly, 0, a_value);
+        for bit in 0..a_bits {
+            add_rbc = bit_format::evaluate_interpolate(add_rbc, 0, a_value[bit as usize]);
+            mul_rbc = bit_format::evaluate_interpolate(mul_rbc, 0, a_value[bit as usize]);
+        }
         let fbc_poly = vec![
             bit_format::ProductPoly::new(vec![add_rbc, wbc_from_add]),
             bit_format::ProductPoly::new(vec![mul_rbc, wbc_from_mul])
