@@ -18,7 +18,7 @@ impl <F: PrimeField> Univariatepoly<F> {
         self.coef.len() - 1
     }
 
-    fn evalaute(&self, x: F) -> F {
+    pub fn evaluate(&self, x: F) -> F {
         // self.coef.iter().enumerate().map(|(index, val)| val * x.pow(index as f64)).sum()
         self.coef.iter().rev().cloned().reduce(|acc, curr| acc * x + curr).unwrap()
     }
@@ -39,7 +39,7 @@ impl <F: PrimeField> Univariatepoly<F> {
         let numerator: Univariatepoly<F> = interpolating_set.iter().filter(|x_val| *x_val != x).map(|x_in_set| Univariatepoly::new(vec![-*x_in_set, F::one()])).product();
     
         // denominator
-        let denominator = F::one() / numerator.evalaute(*x);
+        let denominator = F::one() / numerator.evaluate(*x);
         numerator.scalar_mul(denominator)
     }
 }
@@ -124,7 +124,7 @@ mod test {
 
     #[test]
     fn test_evaluate() {
-        assert_eq!(poly_1().evalaute(Fq::from(2)), Fq::from(17))
+        assert_eq!(poly_1().evaluate(Fq::from(2)), Fq::from(17))
     }
 
     #[test]

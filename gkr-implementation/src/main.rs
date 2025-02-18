@@ -265,24 +265,38 @@ impl <F: PrimeField>GKRProver<F> {
     }
 
     fn invoke_sum_check_prover(&mut self) -> Vec<gkr_sum_check::Proof<F>> {
-        // let mut gkr_transcript = bit_format::Transcript::<sha3::Keccak256, F>::new(sha3::Keccak256::new());
         let mut circuit = self.circuit.clone();
         let executed_layers = circuit.layers.clone();
         let (input_bit, total_bc_bits) = circuit.get_bit_len(0);
         let mut sumcheck_proof = vec![];
+        
         for i in 0..input_bit {
             let w_poly = &executed_layers[i as usize].layer_output;
             let mut gkr_transcript = bit_format::Transcript::<sha3::Keccak256, F>::new(sha3::Keccak256::new());
             gkr_transcript.absorb(&w_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
-            let r0 = gkr_transcript.squeeze();
-            let initial_claimed_sum = bit_format::evaluate_interpolate(w_poly.to_vec(), 0, r0)[i as usize];
-            let initial_fbc_poly = circuit.get_fbc_poly(0, r0);
-            // initial claimed sum and initial fbc poly will be sent to sumcheck prover
+            
+            let mut a_values = vec![F::zero(); input_bit as usize];
+            let mut initial_claimed_sum = F::zero();
+            
+            if i == 0 {
+                initial_claimed_sum = w_poly[0];
+            } else {
+                let rand_no = gkr_transcript.squeeze();
+                // Set the i-th position in a_values to the random value
+                a_values[i as usize - 1] = rand_no;
+                // initial_claimed_sum = bit_format::evaluate_interpolate(w_poly.to_vec(), 0, rand_no)[i as usize];
+            }
 
+            let initial_fbc_poly = circuit.get_fbc_poly(0, a_values);
             let mut sumcheck_prover = gkr_sum_check::Prover::init(initial_fbc_poly.clone(), gkr_transcript);
 
-            sumcheck_proof.push(sumcheck_prover.generate_sumcheck_proof(bit_format::SumPoly { product_polys: initial_fbc_poly }, initial_claimed_sum, total_bc_bits));
-        };
+            sumcheck_proof.push(sumcheck_prover.generate_sumcheck_proof(
+                bit_format::SumPoly { product_polys: initial_fbc_poly },
+                initial_claimed_sum,
+                total_bc_bits
+            ));
+        }
+        
         sumcheck_proof
     }
 
@@ -290,6 +304,18 @@ impl <F: PrimeField>GKRProver<F> {
 
 struct GkrVerifier<F: PrimeField> {
     transcript: bit_format::Transcript<sha3::Keccak256, F>,
+}
+
+impl <F: PrimeField> GkrVerifier<F> {
+    fn init(transcript: bit_format::Transcript<sha3::Keccak256, F>) -> Self {
+        Self {
+            transcript
+        }
+    }
+
+    fn verify_gkr_prrof(&mut self, proof: Vec<gkr_sum_check::Proof<F>>) {
+        
+    }
 }
 
 
@@ -448,7 +474,7 @@ mod test {
         let mut my_circuit: Circuit<Fq> = Circuit::new(layout);
         let my_inputs = vec![Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(4), Fq::from(5), Fq::from(6), Fq::from(7), Fq::from(8)];
         my_circuit.execute(my_inputs);
-        let fbc_poly = my_circuit.get_fbc_poly(0, Fq::from(0));
+        let fbc_poly = my_circuit.get_fbc_poly(0, vec![Fq::from(0)]);
         println!("result for fbc poly{:?}", fbc_poly);
     }
 }

@@ -90,7 +90,7 @@ impl <F: PrimeField> Prover<F> {
         let sumpoly_degree = sum_poly.degree();
         let mut current_poly = sum_poly;
 
-        for bit in 0..total_bc_bits {
+        for _ in 0..total_bc_bits {
             let mut reduced_sum_poly_array: Vec<F> = vec![];
             // since the degree of our poly is 2, we need 2 + 1 points to completely desc the poly
             for i in 0..sumpoly_degree + 1 {
@@ -138,6 +138,24 @@ impl<F: PrimeField> Verifier<F> {
             transcript,
             proof
         }
+    }
+
+    fn verify_sumcheck_proof(&mut self, proof: Proof<F>) {
+        let mut claimed_sum = proof.initial_claimed_sum;
+        let univariates = &proof.univars_and_sums;
+
+        self.transcript.absorb(claimed_sum.into_bigint().to_bytes_be().as_slice());
+
+        for i in 0..univariates.len() {
+            let univar_poly = &univariates[i];
+            let claim = univar_poly.evaluate(F::from(0)) + univar_poly.evaluate(F::from(1));
+            assert_eq!(claimed_sum, claim);
+            self.transcript.absorb(&univar_poly.coef.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
+            let rand_chal = self.transcript.squeeze();
+            let current_poly = univar_poly.evaluate(rand_chal);
+            claimed_sum = current_poly;
+        }
+        // do oracle check  
     }
 
     // fn verify(&mut self) -> bool {
