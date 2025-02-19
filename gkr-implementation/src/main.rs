@@ -4,7 +4,7 @@ use ark_ff::{BigInteger, PrimeField};
 pub mod bit_format;
 pub mod univar_poly;
 pub mod gkr_sum_check;
-use bit_format::SumPoly;
+use bit_format::{ProductPoly, SumPoly};
 use sha3::{Digest, Keccak256};
 fn main() {
     println!("Hello, world!");
@@ -226,7 +226,7 @@ impl <F: PrimeField>Circuit<F> {
         wb.iter().zip(wc.iter()).map(|(wb, wi)| *wb * *wi).collect()
     }
 
-    fn get_fbc_poly(&mut self, layer_index: usize, a_value: Vec<F>) -> Vec<bit_format::ProductPoly<F>> {
+    fn get_fbc_poly(&mut self, layer_index: usize, a_value: Vec<F>) -> SumPoly<F> {
         // let num_vars_after_blowup = self.calculate_num_vars_after_blowup(layer_index);
         let (a_bits, _) = self.get_bit_len(layer_index);
         let (addi_poly, muli_poly) = self.addi_muli_function(layer_index);
@@ -242,7 +242,9 @@ impl <F: PrimeField>Circuit<F> {
             bit_format::ProductPoly::new(vec![add_rbc, wbc_from_add]),
             bit_format::ProductPoly::new(vec![mul_rbc, wbc_from_mul])
         ];
-        fbc_poly
+        SumPoly {
+            product_polys: fbc_poly
+        }
     }
 }
 
@@ -265,11 +267,14 @@ impl <F: PrimeField>GKRProver<F> {
         self.circuit.execute(inputs)
     }
 
-    fn invoke_sum_check_prover(&mut self) -> Vec<gkr_sum_check::Proof<F>> {
+    fn invoke_sum_check_prover(&mut self) -> (Vec<gkr_sum_check::Proof<F>>, SumPoly<F>) {
         let mut circuit = self.circuit.clone();
         let executed_layers = circuit.layers.clone();
         let (input_bit, total_bc_bits) = circuit.get_bit_len(0);
         let mut sumcheck_proof = vec![];
+        let mut initial_fbc_poly = SumPoly {
+            product_polys: vec![]
+        };
         
         for i in 0..input_bit {
             let w_poly = &executed_layers[i as usize].layer_output;
@@ -288,19 +293,17 @@ impl <F: PrimeField>GKRProver<F> {
                 // initial_claimed_sum = bit_format::evaluate_interpolate(w_poly.to_vec(), 0, rand_no)[i as usize];
             }
 
-            let initial_fbc_poly = circuit.get_fbc_poly(0, a_values);
-            let mut sumcheck_prover = gkr_sum_check::Prover::init(SumPoly {
-                product_polys: initial_fbc_poly.clone()
-            }, gkr_transcript);
+            initial_fbc_poly = circuit.get_fbc_poly(0, a_values);
+            let mut sumcheck_prover = gkr_sum_check::Prover::init(initial_fbc_poly.clone(), gkr_transcript);
 
             sumcheck_proof.push(sumcheck_prover.generate_gkr_sumcheck_proof(
-                bit_format::SumPoly { product_polys: initial_fbc_poly },
+                initial_fbc_poly.clone(),
                 initial_claimed_sum,
                 total_bc_bits
             ));
         }
         
-        sumcheck_proof
+        (sumcheck_proof, initial_fbc_poly)
     }
 
 }
@@ -316,12 +319,29 @@ impl <F: PrimeField> GkrVerifier<F> {
         }
     }
 
-    fn verify_gkr_prrof(&mut self, proof: Vec<gkr_sum_check::Proof<F>>) {
-        let sumcheck_verifier = gkr_sum_check::Verifier::init(self.transcript);
-        for i in 0..proof.len() {
-            let current_proof = &proof[i];
-            // let sum_check_verify = sumcheck_verifier.verify_gkr_sumcheck_proof(current_proof);
+    fn evaluate_fbc_poly(&mut self, initial_fbc_poly: SumPoly<F>, eval_points: Vec<F>) -> F {
+        let mut fbc_poly = initial_fbc_poly;
+        // let mut fbc_poly_eval = vec![];
+        for i in 0..eval_points.len() {
+            fbc_poly = fbc_poly.partial_evaluate(0, eval_points[i]);
+            // fbc_poly_eval.push(fbc_poly_evaluated);
         }
+        fbc_poly.reduce()[0]
+    }
+
+    fn verify_gkr_proof(&mut self, proof: Vec<gkr_sum_check::Proof<F>>, fbc_poly: SumPoly<F>) -> bool {
+        for i in 0..proof.len() {
+            let current_proof = proof[i].clone();
+            let gkr_transcript = bit_format::Transcript::<sha3::Keccak256, F>::new(sha3::Keccak256::new());
+            let mut sumcheck_verifier = gkr_sum_check::GKRSumcheckVerifier::init(gkr_transcript, current_proof);
+            let (array_of_rs, final_sum) = sumcheck_verifier.verify_gkr_sumcheck_proof();
+            // i need to get f(r1, r2) and assert that its equal to the final sum
+            let f_r1_r2 = self.evaluate_fbc_poly(fbc_poly.clone(), array_of_rs);
+            if f_r1_r2 != final_sum {
+                return false;
+            }
+        }
+        true
     }
 }
 

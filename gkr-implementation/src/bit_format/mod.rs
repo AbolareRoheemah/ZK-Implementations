@@ -120,7 +120,7 @@ impl <F: PrimeField>ProductPoly<F> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SumPoly<F: PrimeField> {
     pub product_polys: Vec<ProductPoly<F>>
 }

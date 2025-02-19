@@ -119,7 +119,7 @@ impl <F: PrimeField> Prover<F> {
 
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Proof<F: PrimeField> {
     initial_claimed_sum: F,
     univars_and_sums: Vec<univar_poly::Univariatepoly<F>>
