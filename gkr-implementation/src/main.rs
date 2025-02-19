@@ -226,7 +226,7 @@ impl <F: PrimeField>Circuit<F> {
     }
 
     fn get_fbc_poly(&mut self, layer_index: usize, a_value: Vec<F>) -> Vec<bit_format::ProductPoly<F>> {
-        let num_vars_after_blowup = self.calculate_num_vars_after_blowup(layer_index);
+        // let num_vars_after_blowup = self.calculate_num_vars_after_blowup(layer_index);
         let (a_bits, _) = self.get_bit_len(layer_index);
         let (addi_poly, muli_poly) = self.addi_muli_function(layer_index);
         let mut add_rbc = addi_poly;
