@@ -10,7 +10,7 @@ fn main() {
 // Verifier:
 use ark_ff::{BigInteger, PrimeField};
 use sha3::{Keccak256};
-use crate::bit_format;
+use crate::bit_format::{Transcript, SumPoly, ProductPoly, evaluate_interpolate};
 use crate::univar_poly;
 use num_bigint::ToBigInt;
 
@@ -36,12 +36,12 @@ use num_bigint::ToBigInt;
 // 3. compares these two sums then evaluates the initial polynomial at the random challenge for use in the next round. The cycle repeats from step 2
 
 pub struct Prover<F: PrimeField> {
-    poly_vec: Vec<bit_format::ProductPoly<F>>,
-    transcript: bit_format::Transcript<Keccak256, F>
+    poly_vec: SumPoly<F>,
+    transcript: Transcript<Keccak256, F>
 }
 
 impl <F: PrimeField> Prover<F> {
-    pub fn init(poly_vec: Vec<bit_format::ProductPoly<F>>, transcript: bit_format::Transcript<Keccak256, F>) -> Self {
+    pub fn init(poly_vec: SumPoly<F>, transcript: Transcript<Keccak256, F>) -> Self {
         Self { 
             poly_vec,
             transcript
@@ -69,7 +69,7 @@ impl <F: PrimeField> Prover<F> {
     //         self.transcript.absorb(sum.into_bigint().to_bytes_be().as_slice());
     //         self.transcript.absorb(&univar_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
     //         rand_chal = self.transcript.squeeze();
-    //         current_poly = bit_format::evaluate_interpolate(current_poly.clone(), 0, rand_chal);
+    //         current_poly = evaluate_interpolate(current_poly.clone(), 0, rand_chal);
 
     //     }
 
@@ -80,7 +80,7 @@ impl <F: PrimeField> Prover<F> {
     // }
 
     // [ProductPoly { polys: [[0, 1, 0, 0], [30, 1695, 1695, 3360]] }, ProductPoly { polys: [[0, 0, 0, 0], [225, 25200, 25200, 2822400]] }]
-    pub fn generate_sumcheck_proof(&mut self, sum_poly: bit_format::SumPoly<F>, initial_claimed_sum: F, total_bc_bits: u32) -> Proof<F> {
+    pub fn generate_gkr_sumcheck_proof(&mut self, sum_poly: SumPoly<F>, initial_claimed_sum: F, total_bc_bits: u32) -> Proof<F> {
         let mut round_poly = vec![];
 
         // prover send the initial claimed sum to verifier i.e transcript
@@ -125,14 +125,14 @@ pub struct Proof<F: PrimeField> {
     univars_and_sums: Vec<univar_poly::Univariatepoly<F>>
 }
 
-struct Verifier<F: PrimeField> {
+pub struct Verifier<F: PrimeField> {
     polynomial: Vec<F>,
-    transcript: bit_format::Transcript<Keccak256, F>,
+    transcript: Transcript<Keccak256, F>,
     proof: Proof<F>
 }
 
 impl<F: PrimeField> Verifier<F> {
-    fn init(polynomial: Vec<F>, transcript: bit_format::Transcript<Keccak256, F>, proof: Proof<F>) -> Self {
+    pub fn init(polynomial: Vec<F>, transcript: Transcript<Keccak256, F>, proof: Proof<F>) -> Self {
         Self { 
             polynomial,
             transcript,
@@ -140,9 +140,10 @@ impl<F: PrimeField> Verifier<F> {
         }
     }
 
-    fn verify_sumcheck_proof(&mut self, proof: Proof<F>) {
+    pub fn verify_gkr_sumcheck_proof(&mut self, proof: Proof<F>) -> Vec<F> {
         let mut claimed_sum = proof.initial_claimed_sum;
         let univariates = &proof.univars_and_sums;
+        let mut rand_chal_arr = vec![];
 
         self.transcript.absorb(claimed_sum.into_bigint().to_bytes_be().as_slice());
 
@@ -153,9 +154,10 @@ impl<F: PrimeField> Verifier<F> {
             self.transcript.absorb(&univar_poly.coef.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
             let rand_chal = self.transcript.squeeze();
             let current_poly = univar_poly.evaluate(rand_chal);
+            rand_chal_arr.push(rand_chal);
             claimed_sum = current_poly;
         }
-        // do oracle check  
+        rand_chal_arr
     }
 
     // fn verify(&mut self) -> bool {
@@ -177,7 +179,7 @@ impl<F: PrimeField> Verifier<F> {
     //         self.transcript.absorb(&univar_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
     //         let rand_chal = self.transcript.squeeze();
     //         rand_chal_array.push(rand_chal);
-    //         let current_poly = bit_format::evaluate_interpolate(univar_poly.clone(), 0, rand_chal);
+    //         let current_poly = evaluate_interpolate(univar_poly.clone(), 0, rand_chal);
     //         claimed_sum = current_poly[0];
 
     //         // if i + 1 < proof.len() {
@@ -191,7 +193,7 @@ impl<F: PrimeField> Verifier<F> {
 
     //             println!("rand chal array {:?}", rand_chal_array);
     //             for i in 0..rand_chal_array.len() {
-    //                 poly = bit_format::evaluate_interpolate(poly.clone(), 0, rand_chal_array[i]);
+    //                 poly = evaluate_interpolate(poly.clone(), 0, rand_chal_array[i]);
     //             }
     //             println!("final sum {:?}", poly[0]);
     //             println!("final pol {:?}", current_poly[0]);
@@ -202,16 +204,51 @@ impl<F: PrimeField> Verifier<F> {
     // }
 
 }
+pub struct GKRSumcheckVerifier<F: PrimeField> {
+    transcript: Transcript<Keccak256, F>,
+    proof: Proof<F>
+}
+
+impl<F: PrimeField> GKRSumcheckVerifier<F> {
+    pub fn init(transcript: Transcript<Keccak256, F>, proof: Proof<F>) -> Self {
+        Self { 
+            transcript,
+            proof
+        }
+    }
+
+    pub fn verify_gkr_sumcheck_proof(&mut self) -> (Vec<F>, F) {
+        let mut claimed_sum = self.proof.initial_claimed_sum;
+        let univariates = &self.proof.univars_and_sums;
+        let mut rand_chal_arr = vec![];
+
+        self.transcript.absorb(claimed_sum.into_bigint().to_bytes_be().as_slice());
+
+        for i in 0..univariates.len() {
+            let univar_poly = &univariates[i];
+            let claim = univar_poly.evaluate(F::from(0)) + univar_poly.evaluate(F::from(1));
+            assert_eq!(claimed_sum, claim);
+            self.transcript.absorb(&univar_poly.coef.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
+            let rand_chal = self.transcript.squeeze();
+            let current_poly = univar_poly.evaluate(rand_chal);
+            rand_chal_arr.push(rand_chal);
+            claimed_sum = current_poly;
+        }
+        // verifier sends the random challenges and what the oracle check should equal to which is the eval of the last univariate poly at the last random challenge i.e the last claimed sum
+        (rand_chal_arr, claimed_sum)
+    }
+
+}
 
 #[cfg(test)]
 mod test {
-    use super::{Prover, Verifier, bit_format::Transcript, Keccak256};
+    use super::{Prover, Verifier, Transcript, Keccak256};
     use sha3::Digest;
     use ark_bn254::Fq;
 
     // #[test]
     // fn test_transcript() {
-    //     let mut transcript = bit_format::Transcript::<Keccak256, Fq>::new(Keccak256::new());
+    //     let mut transcript = Transcript::<Keccak256, Fq>::new(Keccak256::new());
 
     //     transcript.absorb(b"[0,1]");
     //     transcript.absorb(b"50");

@@ -4,6 +4,7 @@ use ark_ff::{BigInteger, PrimeField};
 pub mod bit_format;
 pub mod univar_poly;
 pub mod gkr_sum_check;
+use bit_format::SumPoly;
 use sha3::{Digest, Keccak256};
 fn main() {
     println!("Hello, world!");
@@ -288,9 +289,11 @@ impl <F: PrimeField>GKRProver<F> {
             }
 
             let initial_fbc_poly = circuit.get_fbc_poly(0, a_values);
-            let mut sumcheck_prover = gkr_sum_check::Prover::init(initial_fbc_poly.clone(), gkr_transcript);
+            let mut sumcheck_prover = gkr_sum_check::Prover::init(SumPoly {
+                product_polys: initial_fbc_poly.clone()
+            }, gkr_transcript);
 
-            sumcheck_proof.push(sumcheck_prover.generate_sumcheck_proof(
+            sumcheck_proof.push(sumcheck_prover.generate_gkr_sumcheck_proof(
                 bit_format::SumPoly { product_polys: initial_fbc_poly },
                 initial_claimed_sum,
                 total_bc_bits
@@ -314,7 +317,11 @@ impl <F: PrimeField> GkrVerifier<F> {
     }
 
     fn verify_gkr_prrof(&mut self, proof: Vec<gkr_sum_check::Proof<F>>) {
-        
+        let sumcheck_verifier = gkr_sum_check::Verifier::init(self.transcript);
+        for i in 0..proof.len() {
+            let current_proof = &proof[i];
+            // let sum_check_verify = sumcheck_verifier.verify_gkr_sumcheck_proof(current_proof);
+        }
     }
 }
 
