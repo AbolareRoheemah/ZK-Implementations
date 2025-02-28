@@ -129,7 +129,7 @@ mod test {
 
     #[test]
     fn test_addition() {
-        assert_eq!((&poly_1::<F>() + &poly_2()).coef, [vec![Fq::from(4), Fq::from(6), Fq::from(3)], vec![Fq::from(0); 8], vec![Fq::from(5)]].concat())
+        assert_eq!((&poly_1::<Fq>() + &poly_2()).coef, [vec![Fq::from(4), Fq::from(6), Fq::from(3)], vec![Fq::from(0); 8], vec![Fq::from(5)]].concat())
     }
 
     #[test]

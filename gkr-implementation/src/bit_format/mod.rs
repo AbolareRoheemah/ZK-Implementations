@@ -44,119 +44,7 @@ impl <F: PrimeField> MultilinearPoly<F> {
 
 }
 
-pub struct Transcript<K: HashTrait, F: PrimeField> {
-    hash_func: K,
-    _field: PhantomData<F>
-}
 
-impl <K: HashTrait, F: PrimeField> Transcript<K, F> {
-    pub fn new(hash_func: K) -> Self {
-        Self {
-            hash_func,
-            _field: PhantomData
-        }
-    }
-
-    pub fn absorb(&mut self, data: &[u8]) {
-        self.hash_func.append(data);
-    }
-
-    pub fn squeeze(&mut self) -> F {
-        let squeezed_hash = self.hash_func.generate_hash();
-        self.absorb(&squeezed_hash);
-        F::from_be_bytes_mod_order(&squeezed_hash)
-    }
-}
-
-trait HashTrait {
-    fn append(&mut self, data: &[u8]);
-    fn generate_hash(&mut self) -> Vec<u8>;
-}
-
-impl HashTrait for Keccak256 {
-    fn append(&mut self, data: &[u8]) {
-        self.update(data);
-    }
-
-    fn generate_hash(&mut self) -> Vec<u8> {
-        let challenge = self.clone().finalize().to_vec();
-        self.update(&challenge);
-        challenge
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ProductPoly<F: PrimeField> {
-    pub polys: Vec<Vec<F>>
-}
-
-impl <F: PrimeField>ProductPoly<F> {
-    pub fn new(polys: Vec<Vec<F>>) -> Self {
-        Self {
-            polys
-        }
-    }
-
-    pub fn degree(&self) -> usize {
-        self.polys.len()
-    }
-
-    pub fn partial_evaluate(&self, var_index: usize, var_eval_at: F) -> Self {
-        let mut new_polys: Vec<Vec<F>> = vec![];
-        for poly in &self.polys {
-            new_polys.push(evaluate_interpolate(poly.clone(), var_index, var_eval_at));
-        }
-        Self::new(new_polys)
-    }
-    pub fn reduce(&self) -> Vec<F> {
-        let mut reduced_polys = vec![F::one(); self.polys[0].len()]; // Initialize with zeros
-
-        for poly in &self.polys {
-            for (i, value) in poly.iter().enumerate() {
-                reduced_polys[i] *= value; 
-            }
-        }
-        reduced_polys
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SumPoly<F: PrimeField> {
-    pub product_polys: Vec<ProductPoly<F>>
-}
-
-impl <F: PrimeField>SumPoly<F> {
-    pub fn new(product_polys: Vec<ProductPoly<F>>) -> Self {
-        Self {
-            product_polys
-        }
-    }
-
-    pub fn degree(&self) -> usize {
-        self.product_polys.len()
-    }
-
-    pub fn partial_evaluate(&self, var_index: usize, var_eval_at: F) -> Self {
-        let mut new_product_polys: Vec<ProductPoly<F>> = vec![];
-        for product_poly in &self.product_polys {
-            new_product_polys.push(product_poly.partial_evaluate(var_index, var_eval_at));
-        }
-        Self::new(new_product_polys)
-    }
-
-    pub fn reduce(&self) -> Vec<F> {
-        let mut reduced_polys = vec![F::one(); self.product_polys[0].polys[0].len()]; // Initialize with zeros
-
-        for product_poly in &self.product_polys {
-            for poly in &product_poly.polys {
-                for (i, value) in poly.iter().enumerate() {
-                    reduced_polys[i] += value;
-                }
-            }
-        }
-        reduced_polys
-    }
-}
 
 // ---------------------------------------------------------------------------------------------------
 
@@ -241,6 +129,8 @@ pub fn get_hypercube(no_of_vars: u32) -> Vec<u32> {
 pub fn evaluate_interpolate<F: PrimeField>(evals: Vec<F>, var_index: usize, var_eval_at: F) -> Vec<F> {
     // panic if the user wants to evaluate at  an inexistent index
     let no_of_vars = (evals.len() as f64).log2() as u32;
+    println!("no_of_vars {}", no_of_vars);
+    println!("var_index {}", var_index);
     if var_index as u32 >= no_of_vars {
         panic!("You cant evaluate at an inexistent index")
     }
@@ -248,6 +138,14 @@ pub fn evaluate_interpolate<F: PrimeField>(evals: Vec<F>, var_index: usize, var_
     let pairs = pair_values(no_of_vars, evals, var_index);
     // now i have my y values and I can now use the formular: f(r) = y1 + r(y2 - y1) this would also be in an array
     pairs.iter().map(|(y1, y2)| *y1 + var_eval_at * (*y2 - y1)).collect()
+}
+
+pub fn full_evaluate<F: PrimeField>(no_of_evaluations: &usize, poly: Vec<F>, eval_points: &Vec<F>) -> F {
+    let mut result = poly;
+    for i in 0..*no_of_evaluations {
+        result = evaluate_interpolate(result, 0, eval_points[i])
+    }
+    result[0]
 }
 
 // i need to generate the pairs. I need the bool hypercube and the evals 

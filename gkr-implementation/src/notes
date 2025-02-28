@@ -1,31 +1,281 @@
-So point of this whole GKR stuff is that a prover (GKR prover) wants to prove to a verifier (GKR verifier) that the result of executing a particular set
-of inputs over the circuit is a particular value i.e Wo
+// So point of this whole GKR stuff is that a prover (GKR prover) wants to prove to a verifier (GKR verifier) that the result of executing a particular set
+// of inputs over the circuit is a particular value i.e Wo
 
-The verifier cant do the work on its own and therefore send it to the prover (this means the provers has the circuit over which we want to execute the inputs)
+// The verifier cant do the work on its own and therefore send it to the prover (this means the provers has the circuit over which we want to execute the inputs)
 
-After the prover executes the circuit, it comes up with the final result and the result of the consecutive layers in the circuit as an array
-e.g [[1695, 0], [15, 1680], [3, 12, 30, 56]]
-From the above array, we can see that there are 3 layers in the circuit (excluding the input layer) i.e 
-Wo = [1695, 0]
-W1 = [15, 1680]
-W2 = [3, 12, 30, 56]
-The input layer will be W3 and it it supplied by the user. For this circuit,
-W3 = [1, 2, 3, 4, 5, 6, 7, 8]
-Now heres where the proving work begins
-1. GKR Prover send Wo to the transcript and squeezes a random challenge r0
-2. GKR prover evaluates Wo at r0 to get the initial claimed sum
-3. GKR prover also gets the f0(a,b,c) poly and evaluates a at r0 to give f0(b,c)
-4. GKR Prover send initial claimed sum and f0(b,c) poly to the sum check prover. In this case, the fbc poly is a vec of product polys.
-5. Sumcheck prover generates a univar poly in b and sends the initial claimed sum and the univar poly to the transcript
-Note: Only the initial claimed sum and the univar poly for each round would be sent to the transcript, no need to send the claimed sum for each round.
-6. Sum check prover squeezes a random chal, r1 and evaluates the f0(b,c) poly at r1 to get the next univar poly in c i.e f(c)
-7. Sum check prover send f(c) to the transcript but doesn't squeeze a chal. Now to the verifier
-8. The sum check verifier then takes the proof, gets the initial claimed sum and the first univar poly from it and 
-
-
-To generate the univariate polynoials, we partially evaluate the fbc poly at c = 0, 1 and 2 and sum over the bool hypercube (I think the partial evaluation function does this already) the new poly would now have 3 elements in it which is the univar poly f(b). The verifier would now use the univariate interpolation method on that poly where the xs are the 0, 1,2 and the ys are the values in the univar poly.
-
-Its basically the same thing Uche did. Just that instead of using for loops, he had methods for the sumpoly and productpoly to loop over them selves and the end call the partial evaluate function. so the only for loop he did was for the 0, 1, 2 evaluation. The rest were just iter::repeat() i think
+// After the prover executes the circuit, it comes up with the final result and the result of the consecutive layers in the circuit as an array
+// e.g [[1695, 0], [15, 1680], [3, 12, 30, 56]]
+// From the above array, we can see that there are 3 layers in the circuit (excluding the input layer) i.e 
+// Wo = [1695, 0]
+// W1 = [15, 1680]
+// W2 = [3, 12, 30, 56]
+// The input layer will be W3 and it it supplied by the user. For this circuit,
+// W3 = [1, 2, 3, 4, 5, 6, 7, 8]
+// Now heres where the proving work begins
+// 1. GKR Prover send Wo to the transcript and squeezes a random challenge r0
+// 2. GKR prover evaluates Wo at r0 to get the initial claimed sum
+// 3. GKR prover also gets the f0(a,b,c) poly and evaluates a at r0 to give f0(b,c)
+// 4. GKR Prover send initial claimed sum and f0(b,c) poly to the sum check prover. In this case, the fbc poly is a vec of product polys.
+// 5. Sumcheck prover generates a univar poly in b and sends the initial claimed sum and the univar poly to the transcript
+// Note: Only the initial claimed sum and the univar poly for each round would be sent to the transcript, no need to send the claimed sum for each round.
+// 6. Sum check prover squeezes a random chal, r1 and evaluates the f0(b,c) poly at r1 to get the next univar poly in c i.e f(c)
+// 7. Sum check prover send f(c) to the transcript but doesn't squeeze a chal. Now to the verifier
+// 8. The sum check verifier then takes the proof, gets the initial claimed sum and the first univar poly from it and 
 
 
-At the end of the sumcheck round, the sumcheck verifier send a sum_poly back to the GKR prover who now gives the GKR verifier the W values needed to complete the sum check.
+// To generate the univariate polynoials, we partially evaluate the fbc poly at c = 0, 1 and 2 and sum over the bool hypercube (I think the partial evaluation function does this already) the new poly would now have 3 elements in it which is the univar poly f(b). The verifier would now use the univariate interpolation method on that poly where the xs are the 0, 1,2 and the ys are the values in the univar poly.
+
+// Its basically the same thing Uche did. Just that instead of using for loops, he had methods for the sumpoly and productpoly to loop over them selves and the end call the partial evaluate function. so the only for loop he did was for the 0, 1, 2 evaluation. The rest were just iter::repeat() i think
+
+
+// At the end of the sumcheck round, the sumcheck verifier send a sum_poly back to the GKR prover who now gives the GKR verifier the W values needed to complete the sum check.
+
+// <!-- For the combination of the Ws -->
+// You need to define a new addi and muli function which would make use of the prev addi and muli function evaluated at the rb and rc values. This is basically like what the 
+
+// Stringing everything together
+// Steps:
+// 1. I need to get the Wo polynomial from my circuit and absorb it into my transcript - gkr prover
+// 2. I squeeze a random challenge, r0 from my transcript and evaluate the Wo at the r0 to get my initial claimed sum = Mo (gkr prover)
+// 3. I get my fo(abc) poly and use the same r0 to evaluate my a. This gives my initial fbc poly (gkr prover)
+// 4. I pass Mo and initial fbc poly to my sumcheck prover who returns a Proof struct containing the round polys and rand challenges
+// what is contained in my fbc poly? 
+// my fbc poly is a Sumpoly containing 2 productpolys. Each productpoly contains 2 arrays i.e multilinear polnomials. One represents the result of evaluating the addi poly which is like evaluating addi(abc) at a = r0 (Note that this can be a1, a2... which is why the number of random vals generated is equal the no of bits of a) and the other reps the result of adding our wb and wc polys. The other productpoly reps the result of evaluating the muli poly which is like evaluating muli(abc) at a = r0 and the other reps the result of multiplying wb and wc polys.
+// Note: in the fbc poly, if the fbc is for layer 0 i.e layer index, i = 0, the ws that would be used would be Wi+1 i.e for the next layer. But the addi and muli polys correspond to the layer index
+// 5. Its time to merge using the 2 to 1 trick. But why do we have to do this? And what are we merging?
+// so remember that when we got fbc polynomial for f0, it comprised of Ws from W1 in form of Wb and Wc. These Ws are trusted values provided by the gkr prover. The gkr prover then evaluates wb at rb and wc at rc to get o1 (i.e B) and o2 (i.e C) . It sends this to the alpha beta function and alpha beta is performed on o1 and o2 (i.e alpha * B + beta * C) to get the next claimed sum.
+// The reason we didnt do this for Wo is because we only have one claim about w_0(r) = o1 but after running sumcheck on w_0(r) we end up with two claims about w_1 i.e w_1(rb) and w_1(rc) so the reason for alpha beta is to go from 2 claims to 1 claim but in the output layer we started with just 1 claim so everything was fine
+// So the verifier knows the input layer and the final output layer which is Wo but doesnt know the Ws of the layers in-between so thats why when its given their values by the prover, it has to carry out sumcheck on them to verify their correctness. But to make the sumcheck on them easy, thats where the alpha beta merging comes in.
+// I'll call the get_alpha_beta_poly function which calls the new_addi_muli function. These functions make use of the prev addi_muli functions and just makes some changes i.e it does alpha * addi+1(rb, b, c) + beta * addi+1(rc, b, c) and the same for muli. The result of this is then multiplied by the Ws of the next layer to get the fbc poly for the next layer.
+// 6. this alpha_beta_poly and the claimed sum is then passed to the sumcheck prover to get the next round of proofs.
+// 7. I'm meant to also get the claimed sum by squeezing from the transcript and evaluating the Ws used in the getting the alpha_beta_poly at the random challenge.
+// 8.I repeat the process until I get to the last layer
+
+// The prover is meant to return the Ws used in the alpha_beta_poly and the sumcheck proofs so the gkr verifier can begin its verification process.
+// The verifier takes the Ws, and with the data in the sumcheck proofs i.e round polys and initial claimed sum, it calls the sumcheck verifier to verify the sumcheck proofs and then when that is done, it evaluates the final fbc poly at the random challenges and if the sumcheck verifications passes the gkr verifier accept?
+// Are we doing oracle check after each proof verification?
+// Ans: yes an oracle check is done after every sumcheck verification
+
+
+
+    // fn invoke_sum_check_prover(&mut self, layer_index: usize) -> (gkr_sum_check::Proof<F>, SumPoly<F>) {
+    //     let mut circuit = self.circuit.clone();
+    //     let executed_layers = circuit.layers.clone();
+    //     let (output_bit, total_bc_bits) = circuit.get_bit_len(layer_index);
+    //     let mut initial_fbc_poly = SumPoly {
+    //         product_polys: vec![]
+    //     };
+    //     let mut w_poly = executed_layers[layer_index].layer_output.clone();
+    //     let mut gkr_transcript = Transcript::<sha3::Keccak256, F>::new(sha3::Keccak256::new());
+    //     gkr_transcript.absorb(&w_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
+
+    //     // let rand_no = gkr_transcript.squeeze();
+    //     // let mut initial_claimed_sum = vec![];
+    //     let mut a_values = vec![];
+    //     for _ in 0..output_bit {
+    //         let rand_no = gkr_transcript.squeeze();
+    //         w_poly = evaluate_interpolate(w_poly.to_vec(), 0, rand_no);
+    //         a_values.push(rand_no)
+    //     }
+    //     let initial_claimed_sum = w_poly[0];
+    //     initial_fbc_poly = circuit.get_fbc_poly(0, a_values);
+    //     let mut sumcheck_prover = gkr_sum_check::Prover::init(initial_fbc_poly.clone(), gkr_transcript, initial_claimed_sum);
+
+    //     let sumcheck_proof = sumcheck_prover.generate_gkr_sumcheck_proof(
+    //         initial_fbc_poly.clone(),
+    //         initial_claimed_sum,
+    //         total_bc_bits
+    //     );
+        
+    //     (sumcheck_proof, initial_fbc_poly)
+    // }
+
+    // fn get_layer_proofs(&mut self) -> Vec<gkr_sum_check::Proof<F>> {
+    //     let circuit_layer = self.circuit.layers.clone();
+    //     let mut layer_proofs = vec![];
+    //     for i in 0..circuit_layer.len() {
+    //         let (proof, _) = self.invoke_sum_check_prover(i);
+    //         layer_proofs.push(proof);
+    //     }
+    //     layer_proofs
+    // }
+
+    // New addi+1 = alpha * addi+1(rb, b, c) + beta * addi+1(rc, b, c)
+    // where alpha & beta are squeezed from transcript, rb = first half of random chal sent from the sumcheck prover and rc = second half of random chal sent from the sumcheck prover
+    // fn new_addi_muli(&mut self, addi_poly: Vec<F>, muli_poly: Vec<F>, wb: Vec<F>, wc: Vec<F>, r_values: Vec<F>) -> (Vec<F>, Vec<F>, F, Vec<F>, Vec<F>) {
+    //     let r_len = r_values.len();
+    //     let (rb, rc) = r_values.split_at(r_len/2);
+    //     let mut addi_rb = addi_poly.clone();
+    //     let mut addi_rc = addi_poly;
+    //     let mut muli_rb = muli_poly.clone();
+    //     let mut muli_rc = muli_poly;
+    //     let mut w_rb = wb;
+    //     let mut w_rc = wc;
+
+    //     for i in 0..rb.len() {
+    //         addi_rb = evaluate_interpolate(addi_rb, 0, rb[i]);
+    //         addi_rc = evaluate_interpolate(addi_rc, 0, rc[i]);
+    //         muli_rb = evaluate_interpolate(muli_rb, 0, rb[i]);
+    //         muli_rc = evaluate_interpolate(muli_rc, 0, rc[i]);
+
+    //         // evaluating wb and wc at r values
+    //         w_rb = evaluate_interpolate(w_rb, 0, rb[i]);
+    //         w_rc = evaluate_interpolate(w_rc, 0, rc[i]);
+    //     }
+    //     let alpha_beta = self.transcript.squeeze_n(2);
+
+    //     let alpha_addi: Vec<F> = addi_rb.iter().map(|eval| *eval * alpha_beta[0]).collect();
+    //     let beta_addi: Vec<F> = addi_rb.iter().map(|eval| *eval * alpha_beta[1]).collect();
+    //     let alpha_muli: Vec<F> = muli_rb.iter().map(|eval| *eval * alpha_beta[0]).collect();
+    //     let beta_muli: Vec<F> = muli_rb.iter().map(|eval| *eval * alpha_beta[1]).collect();
+    //     let mut new_addi = vec![F::zero(); beta_addi.len()];
+    //     let mut new_muli = vec![F::zero(); beta_muli.len()];
+    //     for i in 0..beta_addi.len() {
+    //         new_addi[i] = alpha_addi[i] + beta_addi[i];
+    //         new_muli[i] = alpha_muli[i] + beta_muli[i];
+    //     }
+
+    //     // calculating new claimed sum by doing alpha * B + beta * C
+    //     let new_claimed_sum = alpha_beta[0] * w_rb.iter().sum::<F>() + alpha_beta[1] * w_rc.iter().sum::<F>();
+
+    //     (new_addi, new_muli, new_claimed_sum, w_rb, w_rc)
+    // }
+
+    // fn get_alpha_beta_poly_and_sum(&mut self, layer_index: usize, addi_poly: Vec<F>, muli_poly: Vec<F>, wb: Vec<F>, wc: Vec<F>, r_values: Vec<F>) -> (SumPoly<F>, F, Vec<F>, Vec<F>) {
+    //     let (new_addi, new_muli, new_claimed_sum, w_rb, w_rc) = self.new_addi_muli(addi_poly, muli_poly, wb, wc, r_values);
+        
+    //     // let mut mul_rbc = muli_poly;
+    //     let wbc_from_add= self.circuit.add_wi_x_poly(layer_index + 1);
+    //     let wbc_from_mul= self.circuit.mul_wi_x_poly(layer_index + 1);
+    //     let fbc_poly = vec![
+    //         ProductPoly::new(vec![new_addi, wbc_from_add]),
+    //         ProductPoly::new(vec![new_muli, wbc_from_mul])
+    //     ];
+    //     (
+    //         SumPoly {
+    //             product_polys: fbc_poly
+    //         },
+    //         new_claimed_sum,
+    //         w_rb,
+    //         w_rc
+    //     )
+    // }
+
+    // 
+
+
+// use starknet::ContractAddress;
+
+// use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
+
+// use starkbid_contract::IHelloStarknetSafeDispatcher;
+// use starkbid_contract::IHelloStarknetSafeDispatcherTrait;
+// use starkbid_contract::IHelloStarknetDispatcher;
+// use starkbid_contract::IHelloStarknetDispatcherTrait;
+// use starknet::contract_address_const;
+
+// fn deploy_contract(name: ByteArray) -> ContractAddress {
+//     let contract = declare(name).unwrap().contract_class();
+//     let (contract_address, _) = contract.deploy(@ArrayTrait::new()).unwrap();
+//     contract_address
+// }
+
+// #[test]
+// fn test_increase_balance() {
+//     let contract_address = deploy_contract("HelloStarknet");
+
+//     let dispatcher = IHelloStarknetDispatcher { contract_address };
+
+//     let balance_before = dispatcher.get_balance();
+//     assert(balance_before == 0, 'Invalid balance');
+
+//     dispatcher.increase_balance(42);
+
+//     let balance_after = dispatcher.get_balance();
+//     assert(balance_after == 42, 'Invalid balance');
+// }
+
+// #[test]
+// #[feature("safe_dispatcher")]
+// fn test_cannot_increase_balance_with_zero_value() {
+//     let contract_address = deploy_contract("HelloStarknet");
+
+//     let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
+
+//     let balance_before = safe_dispatcher.get_balance().unwrap();
+//     assert(balance_before == 0, 'Invalid balance');
+
+//     match safe_dispatcher.increase_balance(0) {
+//         Result::Ok(_) => core::panic_with_felt252('Should have panicked'),
+//         Result::Err(panic_data) => {
+//             assert(*panic_data.at(0) == 'Amount cannot be 0', *panic_data.at(0));
+//         }
+//     };
+// }
+
+// #[test]
+// fn test_validate_wallet() {
+//     // Deploy the contract locally
+//     let contract_address = deploy_contract("HelloStarknet");
+//     let dispatcher = IHelloStarknetDispatcher { contract_address };
+
+//     // Test with a valid address
+//     let valid_address: ContractAddress = contract_address_const::<0x02e554f88fc04ddbc2809d15f6dcdc1e8f339d4be8459a2c026713de3d0f22cd>();
+//     assert(dispatcher.validate_wallet(valid_address), 'Valid address should pass');
+
+//     // Test with the zero address
+//     let zero_address: ContractAddress = contract_address_const::<0>();
+//     assert(!dispatcher.validate_wallet(zero_address), 'Zero address should fail');
+
+//     // Test with an invalid address (modified valid address)
+//     let invalid_address: ContractAddress = contract_address_const::<0x02e554f88fc04ddbc2809d15f6dcdc1e8f339d4be8459a2c026713de3d0f2e6>(); // Modified valid address
+//     assert(!dispatcher.validate_wallet(invalid_address), 'Invalid address should fail');
+// }
+ 
+
+// use starknet::ContractAddress;
+
+// #[starknet::interface]
+// pub trait IHelloStarknet<TContractState> {
+//     fn increase_balance(ref self: TContractState, amount: felt252);
+//     fn get_balance(self: @TContractState) -> felt252;
+//     fn validate_wallet(self: @TContractState, address: ContractAddress) -> bool;
+// }
+
+// #[starknet::contract]
+// mod HelloStarknet {
+//     use core::num::traits::Zero;
+//     use starknet::ContractAddress;
+//     use core::traits::TryInto;
+//     // use core::option::OptionTrait;
+
+//     #[storage]
+//     struct Storage {
+//         balance: felt252, 
+//     }
+
+//     #[abi(embed_v0)]
+//     impl HelloStarknetImpl of super::IHelloStarknet<ContractState> {
+//         fn increase_balance(ref self: ContractState, amount: felt252) {
+//             assert(amount != 0, 'Amount cannot be 0');
+//             self.balance.write(self.balance.read() + amount);
+//         }
+
+//         fn get_balance(self: @ContractState) -> felt252 {
+//             self.balance.read()
+//         }
+
+//         fn validate_wallet(self: @ContractState, address: ContractAddress) -> bool {
+//             if address.is_zero() {
+//                 return false;
+//             }
+
+//             let contract_address_option: Option<ContractAddress> = address.try_into();
+            
+//             match contract_address_option {
+//                 Option::Some(_) => true,
+//                 Option::None => false,
+//             }
+//         }
+//     }
+// }
