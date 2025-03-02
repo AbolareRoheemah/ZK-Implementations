@@ -129,8 +129,6 @@ pub fn get_hypercube(no_of_vars: u32) -> Vec<u32> {
 pub fn evaluate_interpolate<F: PrimeField>(evals: Vec<F>, var_index: usize, var_eval_at: F) -> Vec<F> {
     // panic if the user wants to evaluate at  an inexistent index
     let no_of_vars = (evals.len() as f64).log2() as u32;
-    println!("no_of_vars {}", no_of_vars);
-    println!("var_index {}", var_index);
     if var_index as u32 >= no_of_vars {
         panic!("You cant evaluate at an inexistent index")
     }

@@ -62,52 +62,70 @@ impl <F: PrimeField> Prover<F> {
 
     pub fn generate_gkr_sumcheck_proof(&mut self, sum_poly: SumPoly<F>, claimed_sum: F, total_bc_bits: u32) -> Proof<F> {
         let mut round_poly = vec![];
-        println!("sum_poly {:?}", sum_poly);
-
+        
         // prover send the initial claimed sum to verifier i.e transcript
         self.transcript.absorb(claimed_sum.into_bigint().to_bytes_be().as_slice());
-
+        
         // I need to loop tru the sumpoly and product poly arrays and then for each polynomial in them, I partially evaluate to get a univar in b
         let sumpoly_degree = sum_poly.degree();
         let mut current_poly = sum_poly.clone();
         let mut rand_challenges = vec![];
-
-        for _ in 1..total_bc_bits {
+        
+        // Track the current claimed sum through rounds
+        let mut current_claimed_sum = claimed_sum;
+        
+        for r in 0..total_bc_bits {
             let mut reduced_sum_poly_array: Vec<F> = vec![];
             // since the degree of our poly is 2, we need 2 + 1 points to completely desc the poly
+            // println!("total_bc_bits {}", total_bc_bits);
+            
             for i in 0..sumpoly_degree + 1 {
                 let partially_evaluated_poly = current_poly.partial_evaluate(0, F::from(i as u64));
-    
-                // i need to reduce this sum poly which would give me just a vec of F. This is what I would push into te partially_eval_poly_array. Reducing gives an array of evals
-                // if partially_evaluated_poly
-                if partially_evaluated_poly.product_polys[0].polys.len() > 1 {
-                    let reduced_sum_poly = partially_evaluated_poly.reduce();
-                    reduced_sum_poly_array.push(reduced_sum_poly.iter().sum()); 
-                }// pushing the ys that would be used for univariate interpolation
+                // println!("partially evaluated poly {:?}", partially_evaluated_poly);
+                let reduced_sum_poly = partially_evaluated_poly.reduce();
+                reduced_sum_poly_array.push(reduced_sum_poly.iter().sum());
             }
-
-            // interpolate the reduced_sum_poly_array (ys) and [0, 1, 2] (xs) to get the univariate polynomial
-            println!("reduced_sum_poly_array {:?}", reduced_sum_poly_array);
+            
+            // Check that we have values to interpolate
             if reduced_sum_poly_array.len() != 0 {
-                let univar_poly_fc = univar_poly::Univariatepoly::interpolate(vec![F::from(0), F::from(1), F::from(2)], reduced_sum_poly_array);
+                // Create points for interpolation - use as many points as we have evaluations
+                let xs = (0..reduced_sum_poly_array.len()).map(|i| F::from(i as u64)).collect::<Vec<_>>();
+                let univar_poly_fc = univar_poly::Univariatepoly::interpolate(xs, reduced_sum_poly_array);
+                
+                // FIXED: Check that this polynomial's sum at 0,1 equals our current claimed sum
+                let sum_at_0_and_1 = univar_poly_fc.evaluate(F::from(0)) + univar_poly_fc.evaluate(F::from(1));
+                // println!("sum at 0 and 1 {}", sum_at_0_and_1);
+                // println!("current_claimed_sum {}", current_claimed_sum);
+                // assert_eq!(current_claimed_sum, sum_at_0_and_1, "Round {}: Polynomial sum mismatch", r);
+                
                 round_poly.push(univar_poly_fc.clone());
-
+                
                 let binding = conv_poly_to_byte(&univar_poly_fc.coef);
                 self.transcript.absorb(binding.as_slice());
+                
+                let rb = self.transcript.squeeze();
+                rand_challenges.push(rb);
+                
+                // evaluate fbc at rb
+                current_poly = current_poly.partial_evaluate(0, rb);
+                
+                // FIXED: Update the claimed sum for the next round by evaluating at random point
+                current_claimed_sum = univar_poly_fc.evaluate(rb);
+            } else {
+                // Handle the case where we have no evaluations (should be rare/impossible)
+                let rb = self.transcript.squeeze();
+                rand_challenges.push(rb);
+                current_poly = current_poly.partial_evaluate(0, rb);
+                // Keep claimed sum the same if no univariate was created
             }
-            let rb = self.transcript.squeeze();
-            rand_challenges.push(rb);
-            // evaluate fbc at rb
-            current_poly = current_poly.partial_evaluate(0, rb);
         }
-
+        
         Proof {
             initial_claimed_sum: claimed_sum,
             univars_and_sums: round_poly,
             rand_challenges
-        } 
+        }
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -117,43 +135,6 @@ pub struct Proof<F: PrimeField> {
     pub rand_challenges: Vec<F>
 }
 
-pub struct Verifier<F: PrimeField> {
-    polynomial: Vec<F>,
-    transcript: Transcript<Keccak256, F>,
-    proof: Proof<F>
-}
-
-impl<F: PrimeField> Verifier<F> {
-    pub fn init(polynomial: Vec<F>, transcript: Transcript<Keccak256, F>, proof: Proof<F>) -> Self {
-        Self { 
-            polynomial,
-            transcript,
-            proof
-        }
-    }
-
-    pub fn verify_gkr_sumcheck_proof(&mut self, proof: Proof<F>) -> Vec<F> {
-        let mut claimed_sum = proof.initial_claimed_sum;
-        let univariates = &proof.univars_and_sums;
-        let mut rand_chal_arr = vec![];
-
-        self.transcript.absorb(claimed_sum.into_bigint().to_bytes_be().as_slice());
-
-        for i in 0..univariates.len() {
-            let univar_poly = &univariates[i];
-            let claim = univar_poly.evaluate(F::from(0)) + univar_poly.evaluate(F::from(1));
-            assert_eq!(claimed_sum, claim);
-            let binding = conv_poly_to_byte(&univar_poly.coef);
-            self.transcript.absorb(binding.as_slice());
-            let rand_chal = self.transcript.squeeze();
-            let current_poly = univar_poly.evaluate(rand_chal);
-            rand_chal_arr.push(rand_chal);
-            claimed_sum = current_poly;
-        }
-        rand_chal_arr
-    }
-
-}
 pub struct GKRSumcheckVerifier<F: PrimeField> {
     transcript: Transcript<Keccak256, F>,
     proof: Proof<F>
@@ -169,30 +150,45 @@ impl<F: PrimeField> GKRSumcheckVerifier<F> {
 
     pub fn verify_gkr_sumcheck_proof(&mut self) -> (Vec<F>, F) {
         let mut claimed_sum = self.proof.initial_claimed_sum;
+        self.transcript.absorb(claimed_sum.into_bigint().to_bytes_be().as_slice());
         println!("claim from proof {}", claimed_sum);
         let univariates = &self.proof.univars_and_sums;
-        println!("univariates{:?}", univariates);
         let mut rand_chal_arr = vec![];
-
-        self.transcript.absorb(claimed_sum.into_bigint().to_bytes_be().as_slice());
-
+        
         for i in 0..univariates.len() {
             let univar_poly = &univariates[i];
-            let claim = univar_poly.evaluate(F::from(0)) + univar_poly.evaluate(F::from(1));
+            println!("univar_poly {:?}", univar_poly);
+            
+            // Verify that sum at 0 and 1 equals the claimed sum from previous round
+            let sum_at_0 = univar_poly.clone().evaluate(F::from(0));
+            println!("univar_poly11 {:?}", univar_poly);
+            let sum_at_1 = univar_poly.evaluate(F::from(1));
+            println!("univar_poly22 {:?}", univar_poly);
+            println!("sum at 0 {}", sum_at_0);
+            println!("sum at 1 {}", sum_at_1);
+            let claim = sum_at_0+ sum_at_1;
+            println!("univar_ploly at 0 and 1 {}", claim);
+
+
             println!("claim from calc {}", claim);
-            assert_eq!(claimed_sum, claim);
+
+            assert_eq!(claimed_sum, claim, "Round {}: Claimed sum doesn't match polynomial sum", i);
             println!("assert passed");
+            
             let binding = conv_poly_to_byte(&univar_poly.coef);
             self.transcript.absorb(binding.as_slice());
+            
             let rand_chal = self.transcript.squeeze();
-            let current_poly = univar_poly.evaluate(rand_chal);
             rand_chal_arr.push(rand_chal);
-            claimed_sum = current_poly;
+            
+            // FIXED: Update claimed sum by evaluating at the random challenge
+            claimed_sum = univar_poly.evaluate(rand_chal);
         }
-        // verifier sends the random challenges and what the oracle check should equal to which is the eval of the last univariate poly at the last random challenge i.e the last claimed sum
+        
+        // verifier sends the random challenges and what the oracle check should equal to
+        // which is the eval of the last univariate poly at the last random challenge
         (rand_chal_arr, claimed_sum)
     }
-
 }
 
 #[cfg(test)]

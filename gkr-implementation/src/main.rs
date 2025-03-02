@@ -11,7 +11,7 @@ use fiat_shamir_transcript::{conv_poly_to_byte, Transcript};
 pub mod gkr_circuit;
 use gkr_circuit::{Circuit, Layer};
 fn main() {
-    println!("Hello, world!");
+    // println!("Hello, world!");
 }
 
 #[derive(Debug)]
@@ -48,7 +48,7 @@ impl <F: PrimeField>GKRProver<F> {
         self.circuit.execute(inputs)
     }
 
-    pub fn evaluate_fbc_poly(&mut self, initial_fbc_poly: SumPoly<F>, eval_points: Vec<F>) -> F {
+    fn evaluate_fbc_poly(&mut self, initial_fbc_poly: SumPoly<F>, eval_points: Vec<F>) -> F {
         let mut fbc_poly = initial_fbc_poly;
         // let mut fbc_poly_eval = vec![];
         for i in 0..eval_points.len() {
@@ -79,55 +79,56 @@ impl <F: PrimeField>GKRProver<F> {
     }
 
     fn prove(&mut self) -> GKRProof<F> {
-        let gkr_transcript = &mut self.transcript;
+        let gkr_transcript = &mut self.transcript; // pass
 
-        let circuit = &mut self.circuit;
+        let circuit = &mut self.circuit.clone(); //pass
 
-        let (output_bit, total_bc_bits) = circuit.get_bit_len(0);
         // step1
-        let w_0 = &circuit.layers[0].layer_output;
-        let proof_w0 = w_0.clone();
-        let binding = conv_poly_to_byte(w_0);
-        gkr_transcript.absorb(binding.as_slice());
+        let w_0 = &circuit.layers[0].layer_output; //pass
+        let binding = conv_poly_to_byte(w_0); //pass
+        gkr_transcript.absorb(binding.as_slice()); // pass
 
+        let (output_bit, _) = circuit.get_bit_len(0); // pass
         // step2
-        let r_0 = gkr_transcript.squeeze_n(output_bit as usize);
-        let mut initial_claimed_sum_m0 = w_0.clone();
-        for r in r_0.iter() {
-            initial_claimed_sum_m0 = evaluate_interpolate(initial_claimed_sum_m0, 0, *r);
-        }
+        let r_0 = gkr_transcript.squeeze_n(output_bit as usize); //pass
+
+        let mut initial_claimed_sum_m0 = full_evaluate(&r_0.len(), w_0.to_vec(), &r_0); //pass
+        // let proof_w0 = w_0.clone();
 
         // step3
-        let mut initial_fbc_polynomial = circuit.get_fbc_poly(0, r_0);
+        let mut initial_fbc_polynomial = self.circuit.get_fbc_poly(0, r_0); //pass
 
-        // step4
-        let mut sumcheck_transcript = Transcript::new(sha3::Keccak256::new());
-        let mut sumcheck_prover = gkr_sum_check::Prover::init(initial_fbc_polynomial.clone(), sumcheck_transcript.clone(), initial_claimed_sum_m0[0]);
 
         let mut sumcheck_proofs = vec![];
         let mut w_rb_rcs = vec![];
-        for i in 1..circuit.layers.len() {
+        for i in 0..circuit.layers.len() {
+            println!("Layer {}", i);
+            let (_, total_bc_bits) = circuit.get_bit_len(i); 
+            // step4 - Initializing prover
+            let mut sumcheck_transcript = Transcript::new(sha3::Keccak256::new()); //pass
+            let mut sumcheck_prover = gkr_sum_check::Prover::init(initial_fbc_polynomial.clone(), sumcheck_transcript.clone(), initial_claimed_sum_m0); // pass
+
             let sumcheck_proof = sumcheck_prover.generate_gkr_sumcheck_proof(
                 initial_fbc_polynomial.clone(),
-                initial_claimed_sum_m0[0],
+                initial_claimed_sum_m0,
                 total_bc_bits
             );
             let r_values = &sumcheck_proof.rand_challenges;
             sumcheck_proofs.push(sumcheck_proof.clone());
 
             // step5 - getting new fbc and claimed sum
-            let (addi_poly, muli_poly) = self.circuit.addi_muli_function(i);
+            let (addi_poly, muli_poly) = self.circuit.addi_muli_function(i + 1);
             // Wi + 1 for claimed sum
-            let wb = self.circuit.get_wi_x_func(i, 1);
-            let wc = self.circuit.get_wi_x_func(i, 0);
-            let (new_fbc_poly, new_claimed_sum, w_rb, w_rc) = self.circuit.get_alpha_beta_poly_and_sum(i, addi_poly, muli_poly, wb, wc, r_values.to_vec(), &mut sumcheck_transcript);
+            let wb = self.circuit.get_wi_x_func(i + 1, 1);
+            let wc = self.circuit.get_wi_x_func(i + 1, 0);
+            let (new_fbc_poly, new_claimed_sum, w_rb, w_rc) = self.circuit.get_alpha_beta_poly_and_sum(i + 1, addi_poly.to_vec(), muli_poly.to_vec(), wb, wc, r_values.to_vec(), &mut sumcheck_transcript);
             w_rb_rcs.push((w_rb[0], w_rc[0]));
             initial_fbc_polynomial = new_fbc_poly;
-            initial_claimed_sum_m0 = vec![new_claimed_sum];
+            initial_claimed_sum_m0 = new_claimed_sum;
         }
         GKRProof {
             sumcheck_proofs,
-            w_poly: proof_w0,
+            w_poly: w_0.to_vec(),
             w_rb_rcs
         }
     }
@@ -172,6 +173,7 @@ impl <F: PrimeField> GkrVerifier<F> {
     
             let r_0 = gkr_transcript.squeeze_n(output_bit as usize);
             
+            // initializing verifier
             let mut sumcheck_verifier = gkr_sum_check::GKRSumcheckVerifier::init(sumcheck_proof[i].clone());
 
             let (rand_chal_arr, claimed_sum) = sumcheck_verifier.verify_gkr_sumcheck_proof();

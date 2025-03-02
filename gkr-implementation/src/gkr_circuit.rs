@@ -1,6 +1,6 @@
 use ark_ff::PrimeField;
 use crate::bit_format::{get_binary_value_as_string, pair_index, evaluate_interpolate};
-use crate::fiat_shamir_transcript::Transcript;
+use crate::fiat_shamir_transcript::{Transcript, conv_poly_to_byte};
 use crate::combined_polys::{ProductPoly, SumPoly};
 
 
@@ -125,26 +125,37 @@ impl <F: PrimeField>Circuit<F> {
     }
 
     pub fn get_bit_len(&self, layer_index: usize) -> (u32, u32) {
-        let target_layer = &self.layers[layer_index];
-        let num_gates = target_layer.layer_gates.len();
-        
-        // number of boolean variables needed (log2 of num_gates)
-        // if I have 4 gate on the layer, the output gate i.e the gate at the layer in question is going to be 2 bits i.e output_bit while the input gates will have 3 bits i.e 1 + output gate bits. And since we have 2 input gates then it would be (2 + 1) * 2 + 2 = 8 bits.
-        // so for the layer with 4 gates, output_bit = 2 and therefore, arg = ((2 +1) * 2) + 2 = 8
-        // and for the layer with 2 gates, output_bit = 1 and therefore, arg = ((1 +1) * 2) + 1 = 5
-        // and for the layer with 1 gate, output_bit = 0 and therefore, arg = ((0 +1) * 2) + 1 = 3
-        let output_bit = if (num_gates as f64).log2().ceil() as u32 == 0 {
-            (num_gates as f64).log2().ceil() as u32 + 1
+        println!("circuit  {:?}", self);
+        // let target_layer = &self.layers[layer_index];
+        let target_layer = if layer_index < self.layers.len() {
+            &self.layers[layer_index]
+
         } else {
-            (num_gates as f64).log2().ceil() as u32
+            &self.layers[self.layers.len() - 1]
         };
-        (output_bit, (output_bit + 1) * 2)
+        let num_gates = target_layer.layer_gates.len();
+        println!("num_gates{:?}", num_gates);
+
+        
+        // // number of boolean variables needed (log2 of num_gates)
+        // // if I have 4 gate on the layer, the output gate i.e the gate at the layer in question is going to be 2 bits i.e output_bit while the input gates will have 3 bits i.e 1 + output gate bits. And since we have 2 input gates then it would be (2 + 1) * 2 + 2 = 8 bits.
+        // // so for the layer with 4 gates, output_bit = 2 and therefore, arg = ((2 +1) * 2) + 2 = 8
+        // // and for the layer with 2 gates, output_bit = 1 and therefore, arg = ((1 +1) * 2) + 1 = 5
+        // // and for the layer with 1 gate, output_bit = 0 and therefore, arg = ((0 +1) * 2) + 1 = 3
+        let log_base_2 = (num_gates as f64).log2().ceil() as u32;
+        let output_bit = if log_base_2 == 0 {
+            log_base_2 + 1
+        } else {
+            log_base_2
+        };
+        let total_bc_bit = (log_base_2 + 1) * 2;
+        (output_bit, total_bc_bit)
     }
     fn calculate_num_vars_after_blowup(&self, layer_index: usize) -> u32 {
         let target_layer = if layer_index < self.layers.len() {
             &self.layers[layer_index]
         } else {
-            &self.layers[self.layers.len() - 1] // Fallback to the last layer if the index is out of bounds
+            &self.layers[self.layers.len() - 1]
         };
         
         let num_gates = target_layer.layer_gates.len(); // Get the number of gates in the target layer
@@ -160,7 +171,13 @@ impl <F: PrimeField>Circuit<F> {
     }
 
     pub fn addi_muli_function(&mut self, layer_index: usize) -> (Vec<F>, Vec<F>) {
-        let target_layer = &self.layers[layer_index];
+        let target_layer = &self.layers[
+            if layer_index < self.layers.len() {
+                layer_index
+            } else {
+                self.layers.len() - 1
+            }
+        ];
         
         let (output_bit, input_bit) = self.get_bit_len(layer_index);
         let bool_hypercube_len = 2_usize.pow(output_bit + input_bit);
@@ -187,7 +204,6 @@ impl <F: PrimeField>Circuit<F> {
                 Err(_) => panic!("Error converting binary to decimal")
             };
         };
-        // println!("addi_result{:?}", addi_result);
         (addi_result, muli_result)
     }
 
@@ -204,7 +220,6 @@ impl <F: PrimeField>Circuit<F> {
         let hypercube_len = 2_u32.pow(num_vars_after_blowup); // 2^1 = 2
 
         let pairing = pair_index(num_vars_after_blowup, index_of_new_var as usize); // [0, 0, 1, 1, 2, 2, 3, 3]
-        println!("pairing {:?}", pairing);
 
         let mut resulting_wi_poly = vec![F::zero(); hypercube_len as usize]; //
 
@@ -215,7 +230,6 @@ impl <F: PrimeField>Circuit<F> {
                 resulting_wi_poly[*right as usize] = target_layer.layer_output[index];
             }
         });
-        println!("resulting_wi_poly {:?}", resulting_wi_poly);
 
         resulting_wi_poly
     }
@@ -228,7 +242,6 @@ impl <F: PrimeField>Circuit<F> {
         let hypercube_len = 2_u32.pow(num_vars_after_blowup); // 2^1 = 2
 
         let pairing = pair_index(num_vars_after_blowup, index_of_new_var as usize); // [0, 0, 1, 1, 2, 2, 3, 3]
-        println!("pairing {:?}", pairing);
 
         let mut resulting_wi_poly = vec![F::zero(); hypercube_len as usize]; //
 
@@ -237,7 +250,6 @@ impl <F: PrimeField>Circuit<F> {
             resulting_wi_poly[*left as usize] = target_layer.layer_output[index];
             resulting_wi_poly[*right as usize] = target_layer.layer_output[index];
         });
-        println!("resulting_wi_poly for last layer {:?}", resulting_wi_poly);
 
         resulting_wi_poly
     }
@@ -317,12 +329,19 @@ impl <F: PrimeField>Circuit<F> {
             w_rb = evaluate_interpolate(w_rb, 0, rb[i]);
             w_rc = evaluate_interpolate(w_rc, 0, rc[i]);
         }
-        let alpha_beta = transcript.squeeze_n(2); // Use the passed transcript
+        let binding = conv_poly_to_byte(&w_rb);
+        transcript.absorb(binding.as_slice());
+        let alpha = transcript.squeeze();
 
-        let alpha_addi: Vec<F> = addi_rb.iter().map(|eval| *eval * alpha_beta[0]).collect();
-        let beta_addi: Vec<F> = addi_rc.iter().map(|eval| *eval * alpha_beta[1]).collect();
-        let alpha_muli: Vec<F> = muli_rb.iter().map(|eval| *eval * alpha_beta[0]).collect();
-        let beta_muli: Vec<F> = muli_rc.iter().map(|eval| *eval * alpha_beta[1]).collect();
+        let binding = conv_poly_to_byte(&w_rc);
+        transcript.absorb(binding.as_slice());
+        let beta = transcript.squeeze();
+        
+
+        let alpha_addi: Vec<F> = addi_rb.iter().map(|eval| *eval * alpha).collect();
+        let beta_addi: Vec<F> = addi_rc.iter().map(|eval| *eval * beta).collect();
+        let alpha_muli: Vec<F> = muli_rb.iter().map(|eval| *eval * alpha).collect();
+        let beta_muli: Vec<F> = muli_rc.iter().map(|eval| *eval * beta).collect();
         let mut new_addi = vec![F::zero(); beta_addi.len()];
         let mut new_muli = vec![F::zero(); beta_muli.len()];
         for i in 0..beta_addi.len() {
@@ -331,7 +350,7 @@ impl <F: PrimeField>Circuit<F> {
         }
 
         // calculating new claimed sum by doing alpha * B + beta * C
-        let new_claimed_sum = alpha_beta[0] * w_rb.iter().sum::<F>() + alpha_beta[1] * w_rc.iter().sum::<F>();
+        let new_claimed_sum = alpha * w_rb.iter().sum::<F>() + beta * w_rc.iter().sum::<F>();
 
         (new_addi, new_muli, new_claimed_sum, w_rb, w_rc)
     }

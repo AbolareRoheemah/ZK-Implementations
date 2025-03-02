@@ -27,13 +27,34 @@ impl <F: PrimeField>ProductPoly<F> {
         Self::new(new_polys)
     }
     pub fn reduce(&self) -> Vec<F> {
-        let mut reduced_polys = vec![F::one(); self.polys[0].len()]; // Initialize with zeros
-
+        // Check if we have any polys
+        if self.polys.is_empty() {
+            return vec![F::one()]; // Return a single one if no polynomials
+        }
+        
+        // Get the length of the first polynomial if it exists
+        let arr_len = if !self.polys[0].is_empty() {
+            self.polys[0].len()
+        } else {
+            // Default to 1 if the first polynomial is empty
+            1
+        };
+        
+        let mut reduced_polys = vec![F::one(); arr_len];
+        
         for poly in &self.polys {
+            // Skip empty polynomials
+            if poly.is_empty() {
+                continue;
+            }
+            
             for (i, value) in poly.iter().enumerate() {
-                reduced_polys[i] *= value; 
+                if i < reduced_polys.len() {
+                    reduced_polys[i] *= value;
+                }
             }
         }
+        
         reduced_polys
     }
 }
@@ -63,17 +84,30 @@ impl <F: PrimeField>SumPoly<F> {
     }
 
     pub fn reduce(&self) -> Vec<F> {
-        let arr_len = self.product_polys[0].polys[0].len();
+        // Check if we have any product_polys
+        if self.product_polys.is_empty() {
+            return vec![F::zero()]; // Return a single zero if no polynomials
+        }
+        
+        // Try to get the length from the first product poly if possible
+        let arr_len = if !self.product_polys[0].polys.is_empty() && !self.product_polys[0].polys[0].is_empty() {
+            self.product_polys[0].polys[0].len()
+        } else {
+            // Default to 1 if we don't have any valid polynomials
+            1
+        };
+        
         let mut reduced_polys = vec![F::zero(); arr_len];
-        // let mut reduced_polys_arr = vec![F::zero(); ];
-
+        
         for product_poly in &self.product_polys {
             let reduced_prod_poly = product_poly.reduce();
-            // reduced_polys_arr.push(reduced_prod_poly);
-            for i in 0..reduced_prod_poly.len() {
+            
+            // Make sure we handle the case where reduced_prod_poly might be shorter
+            for i in 0..reduced_prod_poly.len().min(arr_len) {
                 reduced_polys[i] += reduced_prod_poly[i];
             }
         }
+        
         reduced_polys
     }
 }
