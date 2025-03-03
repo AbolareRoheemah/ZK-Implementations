@@ -107,7 +107,7 @@ fn get_hypercube(no_of_vars: u32) -> Vec<u32> {
     hypercube
 }
 
-pub fn evaluate_interpolate<F: PrimeField>(evals: Vec<F>, var_index: usize, var_eval_at: F) -> Vec<F> {
+pub fn interpolate_then_evaluate_at_once<F: PrimeField>(evals: Vec<F>, var_index: usize, var_eval_at: F) -> Vec<F> {
     // panic if the user wants to evaluate at  an inexistent index
     let no_of_vars = (evals.len() as f64).log2() as u32;
     if var_index as u32 >= no_of_vars {
@@ -165,8 +165,8 @@ fn pair_values<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize) 
 }
 
 fn main() {
-    let cube = evaluate_interpolate(vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3), Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)], 2, Fq::from(3));
-    // let cube = evaluate_interpolate(2, vec![Fq::from(0), Fq::from(2), Fq::from(0), Fq::from(5)], 1, Fq::from(5));
+    let cube = interpolate_then_evaluate_at_once(vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3), Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)], 2, Fq::from(3));
+    // let cube = interpolate_then_evaluate_at_once(2, vec![Fq::from(0), Fq::from(2), Fq::from(0), Fq::from(5)], 1, Fq::from(5));
     // let cube = get_binary_value(7, 3);.
     println!("cube {:?}", cube);
 }

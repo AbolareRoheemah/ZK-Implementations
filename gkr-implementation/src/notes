@@ -74,7 +74,7 @@
     //     let mut a_values = vec![];
     //     for _ in 0..output_bit {
     //         let rand_no = gkr_transcript.squeeze();
-    //         w_poly = evaluate_interpolate(w_poly.to_vec(), 0, rand_no);
+    //         w_poly = interpolate_then_evaluate_at_once(w_poly.to_vec(), 0, rand_no);
     //         a_values.push(rand_no)
     //     }
     //     let initial_claimed_sum = w_poly[0];
@@ -113,14 +113,14 @@
     //     let mut w_rc = wc;
 
     //     for i in 0..rb.len() {
-    //         addi_rb = evaluate_interpolate(addi_rb, 0, rb[i]);
-    //         addi_rc = evaluate_interpolate(addi_rc, 0, rc[i]);
-    //         muli_rb = evaluate_interpolate(muli_rb, 0, rb[i]);
-    //         muli_rc = evaluate_interpolate(muli_rc, 0, rc[i]);
+    //         addi_rb = interpolate_then_evaluate_at_once(addi_rb, 0, rb[i]);
+    //         addi_rc = interpolate_then_evaluate_at_once(addi_rc, 0, rc[i]);
+    //         muli_rb = interpolate_then_evaluate_at_once(muli_rb, 0, rb[i]);
+    //         muli_rc = interpolate_then_evaluate_at_once(muli_rc, 0, rc[i]);
 
     //         // evaluating wb and wc at r values
-    //         w_rb = evaluate_interpolate(w_rb, 0, rb[i]);
-    //         w_rc = evaluate_interpolate(w_rc, 0, rc[i]);
+    //         w_rb = interpolate_then_evaluate_at_once(w_rb, 0, rb[i]);
+    //         w_rc = interpolate_then_evaluate_at_once(w_rc, 0, rc[i]);
     //     }
     //     let alpha_beta = self.transcript.squeeze_n(2);
 

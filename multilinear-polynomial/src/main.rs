@@ -106,7 +106,7 @@ fn get_hypercube(no_of_vars: u32) -> Vec<String> {
     hypercube
 }
 
-fn evaluate_interpolate<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize, var_eval_at: F) -> Vec<F> {
+fn interpolate_then_evaluate_at_once<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize, var_eval_at: F) -> Vec<F> {
     // panic if the user wants to evaluate at  an inexistent index
     if var_index as u32 >= no_of_vars {
         panic!("You cant evaluate at an inexistent index")
@@ -160,7 +160,7 @@ fn pair_values<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize) 
 }
 
 fn main() {
-    let cube = evaluate_interpolate(3, vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3), Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)], 2, Fq::from(3));
-    // let cube = evaluate_interpolate(2, vec![Fq::from(0), Fq::from(2), Fq::from(0), Fq::from(5)], 0, Fq::from(5));
+    let cube = interpolate_then_evaluate_at_once(3, vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3), Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)], 2, Fq::from(3));
+    // let cube = interpolate_then_evaluate_at_once(2, vec![Fq::from(0), Fq::from(2), Fq::from(0), Fq::from(5)], 0, Fq::from(5));
     println!("{:?}", cube);
 }

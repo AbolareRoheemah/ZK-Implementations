@@ -28,7 +28,7 @@ fn get_hypercube(no_of_vars: u32) -> Vec<u32> {
     hypercube
 }
 
-pub fn evaluate_interpolate<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize, var_eval_at: F) -> Vec<F> {
+pub fn interpolate_then_evaluate_at_once<F: PrimeField>(no_of_vars: u32, evals: Vec<F>, var_index: usize, var_eval_at: F) -> Vec<F> {
     // panic if the user wants to evaluate at  an inexistent index
     if var_index as u32 >= no_of_vars {
         panic!("You cant evaluate at an inexistent index")

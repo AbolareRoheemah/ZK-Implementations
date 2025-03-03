@@ -1,5 +1,5 @@
 use ark_ff::PrimeField;
-use crate::bit_format::evaluate_interpolate;
+use crate::bit_format::interpolate_then_evaluate_at_once;
 
 #[derive(Debug, Clone)]
 pub struct ProductPoly<F: PrimeField> {
@@ -21,7 +21,7 @@ impl <F: PrimeField>ProductPoly<F> {
         let mut new_polys: Vec<Vec<F>> = vec![];
         for poly in &self.polys {
             if poly.len() != 1 {
-                new_polys.push(evaluate_interpolate(poly.clone(), var_index, var_eval_at));
+                new_polys.push(interpolate_then_evaluate_at_once(poly.clone(), var_index, var_eval_at));
             }
         }
         Self::new(new_polys)

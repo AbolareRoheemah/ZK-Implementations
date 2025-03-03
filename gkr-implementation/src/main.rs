@@ -5,7 +5,7 @@ pub mod gkr_sum_check;
 pub mod fiat_shamir_transcript;
 pub mod combined_polys;
 use combined_polys::SumPoly;
-use bit_format::{evaluate_interpolate, full_evaluate};
+use bit_format::{interpolate_then_evaluate_at_once, full_evaluate};
 use sha3::Digest;
 use fiat_shamir_transcript::{conv_poly_to_byte, Transcript};
 pub mod gkr_circuit;
@@ -185,8 +185,8 @@ impl <F: PrimeField> GkrVerifier<F> {
             };
             let (mut addi_poly, mut muli_poly) = self.circuit.addi_muli_function(i);
             for r in &r_0 {
-                addi_poly = evaluate_interpolate(addi_poly, 0, *r);
-                muli_poly = evaluate_interpolate(muli_poly, 0, *r);
+                addi_poly = interpolate_then_evaluate_at_once(addi_poly, 0, *r);
+                muli_poly = interpolate_then_evaluate_at_once(muli_poly, 0, *r);
             }
             let addi_poly_evaluated = full_evaluate(&rand_chal_arr.len(), addi_poly, &rand_chal_arr);
             let muli_poly_evaluated = full_evaluate(&rand_chal_arr.len(), muli_poly, &rand_chal_arr);

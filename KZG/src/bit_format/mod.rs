@@ -2,7 +2,6 @@
 // use std::ops::{Add, Mul};
 use ark_ff::PrimeField;
 use ark_bn254::Fq;
-use sha3::{Digest, Keccak256};
 use std::marker::PhantomData;
 // mod bit_format;
 
@@ -11,70 +10,13 @@ use std::marker::PhantomData;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct MultilinearPoly<F: PrimeField> {
-    coef_and_exp: Vec<F>
+    pub coef_and_exp: Vec<F>
 }
 impl <F: PrimeField> MultilinearPoly<F> {
     pub fn new(coef: Vec<F>) -> Self {
         MultilinearPoly { coef_and_exp: coef }
     }
-
-    // f(a,b,c) = 2ab + 3bc
-    // rep as vec![   ([1,1,0], 2), ([0,1,1], 3)    ]
-    // fn evaluate(&self, vars: Vec<F>) -> F {
-    //     let mut result = F::zero();
-    //     for (exp_arr, coef) in &self.coef_and_exp {
-    //         let term_value = vars.iter().zip(exp_arr.iter()).map(|(var, exp)| {
-    //             var.pow(*exp)
-    //         }).product::<F>();
-    //         result += coef * term_value;
-    //     }
-    //     result
-    // }
-
-    // this can be pictured like the univariate evaluation where we would find the evaluation
-    //  of the polynomial at given points and the construct the interpolating formular from it
-    // so for f(a,b,c) = 2ab + 3bc, evaluating over the boolean hypercube gives all zeros except at 
-    // points (0,1,1) = 3, (1,1,0) = 2, (1,1,1) = 5
-    // f = 
-    // fn interpolate(xs: Vec<F>, ys: Vec<F>) -> Self {
-    //     let new_coef = xs.iter().zip(ys.iter()).map(|(exp_arr, coef)| {
-    //         exp_arr.iter().map(|exp| Self::basis(exp, exp_arr).scalar_mul(coef))
-    //     })
-    // }
-
 }
-
-
-
-// ---------------------------------------------------------------------------------------------------
-
-// Goal: Partial evaluation of multilinear polynomials
-// steps:
-// 1. Representation: What we are going to be given is an array of the evaluation
-//  of the polynomial over the boolean hypercube. So for a 2 var function, 
-// we would have 2^2 i.e 4 enteries in the array:
-// [
-// 00 - 1
-// 01 - 2
-// 10 - 3
-// 11 - 4
-// ]
-// and for 3 var functions, we would have 2^3 i.e 8 enteries in the array:
-// [
-// 000 - 1
-// 001 - 2
-// 010 - 3
-// 011 - 4
-// 100 - 5
-// 101 - 6
-// 110 - 7
-// 111 - 8
-// ]. Now we need a way to know which element of the array represents evaluation at 000
-//  and which was evaluated at 001 etc. 
-// - Im thinking of asking the user to pass in the number of vars, then check if the length
-// of the array provided is equal to 2^(the number passed in). If it is, the next step falls in, 
-// which is to now use the evaluate-interpolate formular to do the partial evaluation 
-// at a specified value for a specified index
 
 // We need to find a way to pair thes points. Pairing them means finding lines that connect 
 // i.e in the bit, we need to find where our variable of interest is the only changing bit.

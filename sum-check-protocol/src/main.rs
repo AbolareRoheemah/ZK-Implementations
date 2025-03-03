@@ -1,5 +1,5 @@
 use ark_ff::PrimeField;
-// use multilinear_polynomial::evaluate_interpolate;
+// use multilinear_polynomial::interpolate_then_evaluate_at_once;
 pub mod fiat_shamir;
 pub mod take_sum_fiat_shamir;
 use crate::fiat_shamir::eval_interpol;
@@ -36,7 +36,7 @@ impl <F: PrimeField> Prover <F> {
     }
 
     fn proof_func(&mut self, polynomial: Vec<F>, rand_chal: F) -> Vec<F> {
-        let poly = eval_interpol::evaluate_interpolate(polynomial, 0, rand_chal);
+        let poly = eval_interpol::interpolate_then_evaluate_at_once(polynomial, 0, rand_chal);
         poly
     }
 }
@@ -65,10 +65,10 @@ impl <F: PrimeField>Verifier<F> {
 
     fn oracle_check(&self, univar_poly: Vec<F>, rand_chal_array: Vec<F>) -> bool {
         let mut initial_poly: Vec<F> = self.polynomial.clone();
-        let final_univar_poly = eval_interpol::evaluate_interpolate(univar_poly.clone(), 0, rand_chal_array[rand_chal_array.len() - 1]);
+        let final_univar_poly = eval_interpol::interpolate_then_evaluate_at_once(univar_poly.clone(), 0, rand_chal_array[rand_chal_array.len() - 1]);
         println!("final rand chal {:?}", rand_chal_array[rand_chal_array.len() - 1]);
         for i in 0..rand_chal_array.len() {
-            initial_poly = eval_interpol::evaluate_interpolate(initial_poly.clone(), 0, rand_chal_array[i]);
+            initial_poly = eval_interpol::interpolate_then_evaluate_at_once(initial_poly.clone(), 0, rand_chal_array[i]);
         }
         assert_eq!(initial_poly[0], final_univar_poly[0]);
         true

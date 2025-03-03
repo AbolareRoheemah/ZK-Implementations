@@ -96,7 +96,7 @@ impl <F: PrimeField> Prover<F> {
             self.transcript.absorb(sum.into_bigint().to_bytes_be().as_slice());
             self.transcript.absorb(&univar_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
             rand_chal = self.transcript.squeeze();
-            current_poly = eval_interpol::evaluate_interpolate(current_poly.clone(), 0, rand_chal);
+            current_poly = eval_interpol::interpolate_then_evaluate_at_once(current_poly.clone(), 0, rand_chal);
 
         }
 
@@ -145,7 +145,7 @@ impl<F: PrimeField> Verifier<F> {
             self.transcript.absorb(&univar_poly.iter().map(|y| y.into_bigint().to_bytes_be()).collect::<Vec<_>>().concat());
             let rand_chal = self.transcript.squeeze();
             rand_chal_array.push(rand_chal);
-            let current_poly = eval_interpol::evaluate_interpolate(univar_poly.clone(), 0, rand_chal);
+            let current_poly = eval_interpol::interpolate_then_evaluate_at_once(univar_poly.clone(), 0, rand_chal);
             claimed_sum = current_poly[0];
 
             // if i + 1 < proof.len() {
@@ -159,7 +159,7 @@ impl<F: PrimeField> Verifier<F> {
 
                 println!("rand chal array {:?}", rand_chal_array);
                 for i in 0..rand_chal_array.len() {
-                    poly = eval_interpol::evaluate_interpolate(poly.clone(), 0, rand_chal_array[i]);
+                    poly = eval_interpol::interpolate_then_evaluate_at_once(poly.clone(), 0, rand_chal_array[i]);
                 }
                 println!("final sum {:?}", poly[0]);
                 println!("final pol {:?}", current_poly[0]);

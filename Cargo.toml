@@ -6,4 +6,4 @@ members = [
     "sum-check-protocol",
     "multilinear-polynomial",
     "zk-polynomials"
-]
+, "KZG"]

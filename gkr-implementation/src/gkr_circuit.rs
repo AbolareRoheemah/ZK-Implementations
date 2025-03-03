@@ -1,5 +1,5 @@
 use ark_ff::PrimeField;
-use crate::bit_format::{get_binary_value_as_string, pair_index, evaluate_interpolate};
+use crate::bit_format::{get_binary_value_as_string, pair_index, interpolate_then_evaluate_at_once};
 use crate::fiat_shamir_transcript::{Transcript, conv_poly_to_byte};
 use crate::combined_polys::{ProductPoly, SumPoly};
 
@@ -275,8 +275,8 @@ impl <F: PrimeField>Circuit<F> {
         let wbc_from_add= self.add_wi_x_poly(layer_index + 1);
         let wbc_from_mul= self.mul_wi_x_poly(layer_index + 1);
         for bit in 0..a_bits {
-            add_rbc = evaluate_interpolate(add_rbc, 0, a_value[bit as usize]);
-            mul_rbc = evaluate_interpolate(mul_rbc, 0, a_value[bit as usize]);
+            add_rbc = interpolate_then_evaluate_at_once(add_rbc, 0, a_value[bit as usize]);
+            mul_rbc = interpolate_then_evaluate_at_once(mul_rbc, 0, a_value[bit as usize]);
         }
         let fbc_poly = vec![
             ProductPoly::new(vec![add_rbc, wbc_from_add]),
@@ -320,14 +320,14 @@ impl <F: PrimeField>Circuit<F> {
         let mut w_rc = wc.clone();
 
         for i in 0..rb.len() {
-            addi_rb = evaluate_interpolate(addi_rb, 0, rb[i]);
-            addi_rc = evaluate_interpolate(addi_rc, 0, rc[i]);
-            muli_rb = evaluate_interpolate(muli_rb, 0, rb[i]);
-            muli_rc = evaluate_interpolate(muli_rc, 0, rc[i]);
+            addi_rb = interpolate_then_evaluate_at_once(addi_rb, 0, rb[i]);
+            addi_rc = interpolate_then_evaluate_at_once(addi_rc, 0, rc[i]);
+            muli_rb = interpolate_then_evaluate_at_once(muli_rb, 0, rb[i]);
+            muli_rc = interpolate_then_evaluate_at_once(muli_rc, 0, rc[i]);
 
             // evaluating wb and wc at r values
-            w_rb = evaluate_interpolate(w_rb, 0, rb[i]);
-            w_rc = evaluate_interpolate(w_rc, 0, rc[i]);
+            w_rb = interpolate_then_evaluate_at_once(w_rb, 0, rb[i]);
+            w_rc = interpolate_then_evaluate_at_once(w_rc, 0, rc[i]);
         }
         let binding = conv_poly_to_byte(&w_rb);
         transcript.absorb(binding.as_slice());
